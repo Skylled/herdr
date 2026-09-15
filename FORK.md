@@ -114,10 +114,12 @@ no beep and no toast.
 - **Upstream:** no, and it should not go. For a human-facing multiplexer, staying
   quiet about a pane the human is watching is a defensible product choice. It is
   wrong for us because our consumer is a program that is never watching.
-- **Not verified live:** **outstanding.** Nobody has yet observed a focused-pane
-  completion emitting a `done` event on the installed build. Installed 2026-09-15;
-  the live test is pending the restart that picks it up. Until someone runs it,
-  this patch is verified only by unit tests.
+- **Not verified live:** **outstanding.** Installed and running since 2026-09-15,
+  but nobody has yet observed a focused-pane completion emitting a `done` event on
+  it. Until someone runs that test, this patch is verified only by unit tests and
+  code reading. The test is the #55 repro in reverse: prompt a session with its
+  pane focused, stay on it, and expect the event in about ten seconds rather than
+  never.
 
 ### 3. Completion suppressed when no client attached — superseded
 
@@ -141,35 +143,98 @@ untested part. The branch is kept as the record of that investigation.
 
 ## Installed
 
-| | |
-|---|---|
-| Path | `~/.local/bin/herdr` |
-| SHA-256 | `c7e140b218e8d35b77b035a17b688777846f716143b90b5467e1b3b693877d80` |
-| Contains | 0.9.0 + patch 1 + patch 2 |
-| Built from | `a09edf99` (master) |
-| Installed | 2026-09-15 |
+Currently installed and running: **0.9.0 + patch 1 + patch 2**, built from
+`a09edf99`, installed and restarted 2026-09-15.
 
-**A restart is required before an installed binary is actually running.** The
-process on the socket keeps serving the old image until then; the install and the
-restart are separate events, and only the second one changes behaviour.
+Verify with **exactly** one of these two commands — the digest you get depends on
+which, and they are not comparable:
 
-Fallbacks, both kept:
+```sh
+shasum -a 256 ~/.local/bin/herdr   # c7e140b218e8d35b77b035a17b688777846f716143b90b5467e1b3b693877d80
+shasum -a 1   ~/.local/bin/herdr   # 19c16da4d2ca586061f00bba8c042374db3e2536
+```
 
-| Backup | SHA-256 | Contains |
-|---|---|---|
-| `~/.local/bin/herdr.bak-0.9.0-altscreen-20260915` | `95ab73bf07d57b95e98302a4ce61da087b18a1b59df5aa39313958e39bb2afcb` | 0.9.0 + patch 1 — what ran 09-11 to 09-15 |
-| `~/.local/bin/herdr.bak-0.9.0-stock-20260910` | `32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17` | stock 0.9.0 |
+> **`shasum` with no `-a` is SHA-1, not SHA-256.** Both digests above are correct
+> for the same file: 40 hex characters is SHA-1, 64 is SHA-256. If what you get is
+> the wrong length to match, you ran the other algorithm — that is not a wrong
+> binary. Check the length before concluding anything. This bit someone on
+> 2026-09-15, on this page, which is the page written to prevent it.
+
+Digests are written in full throughout. A truncated hash is not comparable and
+invites the same mistake this section is about.
+
+**`~/.local/bin/herdr`** — 0.9.0 + patch 1 + patch 2, built from `a09edf99`:
+
+- SHA-256 `c7e140b218e8d35b77b035a17b688777846f716143b90b5467e1b3b693877d80`
+- SHA-1 &nbsp;&nbsp;`19c16da4d2ca586061f00bba8c042374db3e2536`
+
+**`~/.local/bin/herdr.bak-0.9.0-altscreen-20260915`** — 0.9.0 + patch 1, the image
+that ran 2026-09-11 to 2026-09-15:
+
+- SHA-256 `95ab73bf07d57b95e98302a4ce61da087b18a1b59df5aa39313958e39bb2afcb`
+- SHA-1 &nbsp;&nbsp;`96855d935c66b2a9393fbe451a021336c78c2f03`
+
+**`~/.local/bin/herdr.bak-0.9.0-stock-20260910`** — stock 0.9.0:
+
+- SHA-256 `32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17`
+- SHA-1 &nbsp;&nbsp;`88bc05f68abe28d65536414ce5844b110679bc7f`
 
 `herdr --version` reports `0.9.0` for every one of these. **It does not
-distinguish our builds from stock, or from each other.** Hash the file.
+distinguish our builds from stock, or from each other.** Hash the file — and see
+[Version suffix](#version-suffix-planned) for the plan to fix that.
+
+**An install is not live until the server restarts.** The running process keeps
+serving the old image; install and restart are separate events and only the second
+changes behaviour.
+
+## Version suffix (planned)
+
+**Do this on the next build.** Not retrofitted to the current one — changing the
+version string means another build, install and restart, which is not worth it for
+a label.
+
+The problem is above: `herdr --version` says `0.9.0` for stock and for every build
+we make, so a checksum is currently the only honest answer to "what is this". It
+is also why `session_list`'s `probedVersion` carries no information today.
+
+Proposed form: **`0.9.0+fork.N`** — upstream's version, then a `+` build-metadata
+suffix with a counter we bump per installed build. So tonight's binary would have
+been `0.9.0+fork.1` and the next is `0.9.0+fork.2`.
+
+Why this form:
+
+- `+`-prefixed build metadata is the semver-designated place for exactly this, and
+  semver says it is **ignored for precedence** — `0.9.0+fork.2` compares equal to
+  `0.9.0`. Anything doing a version comparison, including upstream's own update
+  check, keeps working and will not think we are ahead of or behind a real release.
+- It never collides with an upstream version, so adopting a new base is just
+  changing the part in front of the `+`.
+- A plain counter, not a git SHA: it stays short, it is readable aloud, and the SHA
+  is already recorded here against the checksum. Bump it in the same commit that
+  records the new digest.
+
+**Constraint: it must not break anything that parses the version.** Before
+shipping it, check the update checker, any `probedVersion` consumer in Earshot, and
+the CLI's own version handling for exact-string comparisons against `0.9.0` or for
+parsers that reject a `+` suffix. A label that breaks the update check is worse
+than no label.
 
 ## Installing
 
-> **Installing requires restarting the herdr server, which kills every pane it
-> hosts — including any agent session mid-turn, and including the pane you are
-> running this from.** This is Kyle's deliberate act, scheduled when no session is
-> mid-flight. It is not a step an agent performs. A fleet-wide apply went wrong
-> this way once already.
+> **Installing requires restarting the herdr server, and how you restart it
+> decides whether every pane dies.** This is Kyle's deliberate act, not a step an
+> agent performs.
+>
+> - `groundctl stop herdr` then `groundctl start herdr` — **panes survive.** Done
+>   on 2026-09-15: the server came back as a new pid and all eleven panes,
+>   including the agent pane driving the install, were still there.
+> - A `bootout`-style restart **SIGKILLs the process group and takes every pane
+>   with it.** This is what went wrong in the fleet-wide apply earlier on
+>   2026-09-15. Do not reach for it.
+>
+> The other failure seen on 2026-09-15 was a restart that could not take the socket
+> back because an orphaned server still held it. If that happens, stop the orphan
+> first, confirm the socket cleared, then start.
 
 Build only, safe at any time:
 
@@ -192,14 +257,17 @@ cp target/release/herdr ~/.local/bin/herdr.new
 chmod +x ~/.local/bin/herdr.new
 mv ~/.local/bin/herdr.new ~/.local/bin/herdr
 
-# 3. record what is now there, and put it in this file
+# 3. record BOTH digests here, and bump the version suffix in the same commit
 shasum -a 256 ~/.local/bin/herdr
+shasum -a 1   ~/.local/bin/herdr
 
-# 4. kills every pane
-groundctl restart herdr
+# 4. stop, confirm the socket is clear, then start -- panes survive this.
+#    Do NOT bootout: that SIGKILLs the process group and kills every pane.
+groundctl stop herdr
+groundctl start herdr
 ```
 
-Rollback is the same swap with the backup, and another restart.
+Rollback is the same swap with the backup, and another stop/start.
 
 Leave `~/.config/herdr/` alone. Manifest auto-update is deliberately disabled and
 the manifests are pinned; see Quest Log #22.
@@ -211,10 +279,10 @@ works, so let's keep it that way."*
 
 The alternative was rebasing onto `origin/master` (`32503f81`, #4148), which was
 probed and applies cleanly. It was rejected because installing is the expensive
-operation, not rebasing: every install costs a restart that kills every pane, and
-a rebase would make that restart deliver our patches *and* 84 unexercised upstream
-commits at once, in the component every session-state conclusion depends on. If
-something then misbehaved there would be no way to attribute it. Keep the risky
+operation, not rebasing: every install costs a restart of the component that
+watches every session, and a rebase would make that restart deliver our patches
+*and* 84 unexercised upstream commits at once. If something then misbehaved there
+would be no way to attribute it. Keep the risky
 operation carrying one variable.
 
 Consequence: `origin/master` stays ahead of what we build, so `master` cannot be
