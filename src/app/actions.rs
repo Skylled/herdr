@@ -1963,9 +1963,6 @@ impl AppState {
         change: &EffectiveStateChange,
         suppress_completion: bool,
     ) -> Option<bool> {
-        let is_active_tab = self.pane_is_in_active_tab(ws_idx, pane_id);
-        let suppress_active_tab_notifications =
-            active_tab_suppresses_notifications(is_active_tab, self.outer_terminal_focus);
         let pane = self.workspaces[ws_idx]
             .tabs
             .iter_mut()
@@ -1974,7 +1971,29 @@ impl AppState {
         if change.state != AgentState::Idle {
             pane.seen = true;
         } else if !suppress_completion && is_completion_transition(change) {
-            pane.seen = suppress_active_tab_notifications;
+            // FORK CHANGE: always latch completion; never infer it away.
+            //
+            // `seen == false` is what turns AgentState::Idle into AgentStatus::Done
+            // (api_helpers::pane_agent_status), and AgentStatus::Done is the only
+            // completion signal the API and plugin hooks ever emit. This line used to
+            // read `pane.seen = active_tab_suppresses_notifications(..)`, so a pane
+            // that looked watched finished as plain `idle` and no consumer was told.
+            //
+            // "Looked watched" was a guess. UNKNOWN FOCUS IS NOT WATCHED:
+            // outer_terminal_focus stays None until some client reports real OS focus,
+            // and None != Some(false), so never-reported focus counted as a watcher.
+            // Worse, a real watcher counted too -- API consumers are programs, they are
+            // never looking at a pane, and a suppressed event is not a deferred event,
+            // it is a lost one.
+            //
+            // The human case is still handled, by observation instead of inference:
+            // mark_active_tab_seen() clears this latch when a client actually reports
+            // focus (server/headless.rs, sync_foreground_client_state). Sound and toast
+            // suppression is deliberately unchanged and still focus-driven -- it is
+            // computed separately in record_or_deliver_agent_notification(), so a human
+            // watching a pane still gets no beep and no toast for it. Guessing wrong
+            // there costs a beep; guessing wrong here costs the event entirely.
+            pane.seen = false;
         }
         let seen = pane.seen;
 
@@ -2975,11 +2994,14 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn active_tab_completion_marks_pane_seen() {
+    /// Drive one pane from Working to Idle and report the pane's derived
+    /// AgentStatus -- the value API consumers and plugin hooks actually receive.
+    fn completion_status_with_focus(
+        outer_terminal_focus: Option<bool>,
+    ) -> crate::api::schema::AgentStatus {
         let mut state = app_with_workspaces(&["active"]);
         state.active = Some(0);
-        state.outer_terminal_focus = Some(true);
+        state.outer_terminal_focus = outer_terminal_focus;
         let pane_id = *state.workspaces[0].panes.keys().next().unwrap();
         let terminal_id = state.workspaces[0]
             .panes
@@ -2988,7 +3010,7 @@ mod tests {
             .attached_terminal_id
             .clone();
         state.terminals.get_mut(&terminal_id).unwrap().state = AgentState::Working;
-        state.workspaces[0].panes.get_mut(&pane_id).unwrap().seen = false;
+        state.workspaces[0].panes.get_mut(&pane_id).unwrap().seen = true;
 
         state.handle_app_event(AppEvent::StateChanged {
             pane_id,
@@ -3003,7 +3025,76 @@ mod tests {
         let terminal = state.terminals.get(&terminal_id).unwrap();
         assert_eq!(terminal.state, AgentState::Idle);
         let pane = state.workspaces[0].panes.get(&pane_id).unwrap();
-        assert!(pane.seen);
+        crate::app::api_helpers::pane_agent_status(terminal.state, pane.seen)
+    }
+
+    /// FORK CHANGE regression test. Reproduces the controlled repro on Quest Log
+    /// #55: a turn that ends while the pane is the focused active tab must still
+    /// report `done`. Before the fix this arrived as `idle` and every consumer
+    /// dropped it as non-news.
+    #[test]
+    fn focused_active_tab_completion_still_reports_done() {
+        assert_eq!(
+            completion_status_with_focus(Some(true)),
+            crate::api::schema::AgentStatus::Done
+        );
+    }
+
+    /// Unknown focus must not be read as "someone is watching". This is the
+    /// overnight case: no client ever reported focus, so outer_terminal_focus
+    /// sat at None forever.
+    #[test]
+    fn unknown_outer_focus_completion_reports_done() {
+        assert_eq!(
+            completion_status_with_focus(None),
+            crate::api::schema::AgentStatus::Done
+        );
+    }
+
+    #[test]
+    fn unfocused_active_tab_completion_reports_done() {
+        assert_eq!(
+            completion_status_with_focus(Some(false)),
+            crate::api::schema::AgentStatus::Done
+        );
+    }
+
+    /// Blocked is derived from AgentState alone and never consults `seen`, so it
+    /// was never suppressed by focus. Locked in here because a missed blocked
+    /// event is worse than a missed done -- it strands a session waiting on a human.
+    #[test]
+    fn blocked_is_reported_regardless_of_outer_focus() {
+        for focus in [Some(true), Some(false), None] {
+            let mut state = app_with_workspaces(&["active"]);
+            state.active = Some(0);
+            state.outer_terminal_focus = focus;
+            let pane_id = *state.workspaces[0].panes.keys().next().unwrap();
+            let terminal_id = state.workspaces[0]
+                .panes
+                .get(&pane_id)
+                .unwrap()
+                .attached_terminal_id
+                .clone();
+            state.terminals.get_mut(&terminal_id).unwrap().state = AgentState::Working;
+
+            state.handle_app_event(AppEvent::StateChanged {
+                pane_id,
+                agent: Some(Agent::Pi),
+                state: AgentState::Blocked,
+                visible_blocker: true,
+                visible_working: false,
+                process_exited: false,
+                observed_at: std::time::Instant::now(),
+            });
+
+            let terminal = state.terminals.get(&terminal_id).unwrap();
+            let pane = state.workspaces[0].panes.get(&pane_id).unwrap();
+            assert_eq!(
+                crate::app::api_helpers::pane_agent_status(terminal.state, pane.seen),
+                crate::api::schema::AgentStatus::Blocked,
+                "blocked suppressed with outer_terminal_focus = {focus:?}"
+            );
+        }
     }
 
     #[test]
