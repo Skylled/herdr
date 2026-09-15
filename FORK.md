@@ -30,11 +30,36 @@ to "what is running".**
 | `origin/master` | `32503f81` (#4148) — **84 commits ahead of our base** |
 
 `origin/master` on our own fork is a current mirror of upstream and has moved on;
-our patches sit on the older `58271459`. Adopting the newer base is deliberately
-deferred — see [Base decision](#base-decision).
+our patches sit on the older `58271459`. Staying there is a deliberate decision —
+see [Base decision](#base-decision).
 
 Note `upstream/master` as a remote-tracking ref in a local clone goes stale. Run
 `git fetch upstream` before believing it.
+
+## Check upstream before writing a patch
+
+**Standing policy.** Kyle, 2026-09-15: *"if we run into any issues with things
+like idle states, we can know to check upstream for fixes before we roll our
+own."*
+
+We are 84 commits behind upstream by choice, so any bug we hit may already be
+fixed in commits we have not taken. That makes "search upstream" the **first**
+step of a Herdr debugging session, not a postscript after the patch is written.
+It applies most to agent state detection — idle, done, blocked, focus, hook
+authority — which is where our patches already cluster and where upstream is most
+active.
+
+```sh
+git fetch upstream
+git log --oneline 58271459..upstream/master -- src/app src/detect src/terminal
+git log --oneline 58271459..upstream/master --grep=idle --grep=agent --grep=detect -i
+```
+
+Finding a fix upstream does not mean adopting the base. Cherry-picking one commit
+is usually cheaper than taking all 84, and either way it beats writing a second
+fix for a solved problem. Record what you searched in the issue, including a
+negative result — "checked upstream, nothing" is worth writing down, because the
+next person will otherwise wonder.
 
 ## Patches
 
@@ -58,7 +83,7 @@ a batch scrolls close to a full page, preserving enough overlap for
 `merge_scrolled_up` to align successive frames.
 
 - **Merged:** yes.
-- **Installed:** yes — this is what is running. See [Installed](#installed).
+- **Installed:** yes, since 2026-09-11. See [Installed](#installed).
 - **Upstream:** no. #14 was cancelled as an upstream *report*, not as a fix.
 - **Not verified live:** the adaptive batch size against a real Claude Code pane.
   It has run since 2026-09-11 without complaint, which is not a test.
@@ -85,12 +110,14 @@ in `record_or_deliver_agent_notification`, so a human watching a pane still gets
 no beep and no toast.
 
 - **Merged:** yes.
-- **Installed:** **no.** The running binary predates it.
+- **Installed:** yes, 2026-09-15. See [Installed](#installed).
 - **Upstream:** no, and it should not go. For a human-facing multiplexer, staying
   quiet about a pane the human is watching is a defensible product choice. It is
   wrong for us because our consumer is a program that is never watching.
-- **Not verified live:** end to end. Needs a focused pane completing a turn on the
-  new binary, which needs an install and a restart.
+- **Not verified live:** **outstanding.** Nobody has yet observed a focused-pane
+  completion emitting a `done` event on the installed build. Installed 2026-09-15;
+  the live test is pending the restart that picks it up. Until someone runs it,
+  this patch is verified only by unit tests.
 
 ### 3. Completion suppressed when no client attached — superseded
 
@@ -117,13 +144,24 @@ untested part. The branch is kept as the record of that investigation.
 | | |
 |---|---|
 | Path | `~/.local/bin/herdr` |
-| SHA-256 | `95ab73bf07d57b95e98302a4ce61da087b18a1b59df5aa39313958e39bb2afcb` |
-| Contains | 0.9.0 + patch 1 |
-| Installed | 2026-09-11 |
-| Stock 0.9.0 backup | `~/.local/bin/herdr.bak-0.9.0-stock-20260910`, SHA-256 `32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17` |
+| SHA-256 | `c7e140b218e8d35b77b035a17b688777846f716143b90b5467e1b3b693877d80` |
+| Contains | 0.9.0 + patch 1 + patch 2 |
+| Built from | `a09edf99` (master) |
+| Installed | 2026-09-15 |
 
-`herdr --version` reports `0.9.0` for all of these. **It does not distinguish our
-builds from stock.** Hash the file.
+**A restart is required before an installed binary is actually running.** The
+process on the socket keeps serving the old image until then; the install and the
+restart are separate events, and only the second one changes behaviour.
+
+Fallbacks, both kept:
+
+| Backup | SHA-256 | Contains |
+|---|---|---|
+| `~/.local/bin/herdr.bak-0.9.0-altscreen-20260915` | `95ab73bf07d57b95e98302a4ce61da087b18a1b59df5aa39313958e39bb2afcb` | 0.9.0 + patch 1 — what ran 09-11 to 09-15 |
+| `~/.local/bin/herdr.bak-0.9.0-stock-20260910` | `32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17` | stock 0.9.0 |
+
+`herdr --version` reports `0.9.0` for every one of these. **It does not
+distinguish our builds from stock, or from each other.** Hash the file.
 
 ## Installing
 
@@ -168,13 +206,22 @@ the manifests are pinned; see Quest Log #22.
 
 ## Base decision
 
-Deferred to Kyle, who has said we will revisit what to pull from upstream later,
-possibly after upstream's next major release.
+**Decided 2026-09-15: stay on `58271459`.** Kyle: *"let's stay put. Everything
+works, so let's keep it that way."*
 
-- **Stay on `58271459`.** Our patches are verified against it and it is what is
-  running. Cost: our own `origin/master` stays ahead of what we build, so `master`
-  cannot be pushed without rewriting it, and the gap grows.
-- **Rebase onto `origin/master` (`32503f81`).** Patch 2 was probed onto it and
-  applies cleanly with tests, clippy and fmt green. Cost: 84 upstream commits we
-  have not exercised, in a component every session-state conclusion depends on,
-  and patch 1 has not been probed there at all.
+The alternative was rebasing onto `origin/master` (`32503f81`, #4148), which was
+probed and applies cleanly. It was rejected because installing is the expensive
+operation, not rebasing: every install costs a restart that kills every pane, and
+a rebase would make that restart deliver our patches *and* 84 unexercised upstream
+commits at once, in the component every session-state conclusion depends on. If
+something then misbehaved there would be no way to attribute it. Keep the risky
+operation carrying one variable.
+
+Consequence: `origin/master` stays ahead of what we build, so `master` cannot be
+pushed under its own name without rewriting published history. Publish additively
+instead — the fork's line of development is on the `fork/master` branch.
+
+This is not permanent. Revisit after an upstream major release, or when
+[Check upstream before writing a patch](#check-upstream-before-writing-a-patch)
+turns up something we want. When it happens it should be its own job: rebase, full
+suite, install, verify, and only then land anything new on top.
