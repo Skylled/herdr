@@ -45,6 +45,7 @@ pub(crate) struct PendingAltScreenRead {
     restore_started_at: Option<Instant>,
     observed_content_seq: u64,
     upward_events: usize,
+    harvest_events: usize,
     reached_top: bool,
     valid: bool,
 }
@@ -83,6 +84,7 @@ impl PendingAltScreenRead {
             restore_started_at: None,
             observed_content_seq: content_seq,
             upward_events: 0,
+            harvest_events: WHEEL_STEP_EVENTS,
             reached_top: false,
             valid: true,
         }
@@ -292,12 +294,14 @@ impl PendingAltScreenRead {
                     terminal_id = %self.terminal_id,
                     ?merge,
                     retained_rows = self.history.len(),
-                    batch_events = WHEEL_STEP_EVENTS,
+                    batch_events = self.harvest_events,
                     step_expired,
                     "alternate-screen harvest snapshot"
                 );
                 match merge {
-                    UpwardMerge::Advanced { .. } => {
+                    UpwardMerge::Advanced { rows } => {
+                        self.harvest_events =
+                            next_harvest_events(self.harvest_events, rows, snapshot.rows.len());
                         self.previous = snapshot;
                         if self.history.len() >= self.lines {
                             self.start_restore(runtime, now, Some(snapshot_seq))
@@ -310,7 +314,10 @@ impl PendingAltScreenRead {
                         self.start_restore(runtime, now, Some(snapshot_seq))
                     }
                     UpwardMerge::Unaligned if step_expired => {
-                        self.valid = false;
+                        // The application scrolled past the previous frame without any
+                        // recognizable overlap, so no further rows can be attributed to it.
+                        // Rows already merged from aligned frames stay valid; the response
+                        // reports them as an incomplete (truncated) capture.
                         self.start_restore(runtime, now, Some(snapshot_seq))
                     }
                     UpwardMerge::Unchanged | UpwardMerge::Unaligned => {
@@ -354,7 +361,7 @@ impl PendingAltScreenRead {
         now: Instant,
         baseline_seq: u64,
     ) -> PollOutcome {
-        let events = WHEEL_STEP_EVENTS;
+        let events = self.harvest_events;
         if send_wheel(runtime, MouseEventKind::ScrollUp, events, &self.previous).is_err() {
             return self.complete_fallback();
         }
@@ -421,7 +428,7 @@ impl PendingAltScreenRead {
         None
     }
 
-    fn complete_fallback(self) -> PollOutcome {
+    fn complete_fallback(mut self) -> PollOutcome {
         debug!(
             terminal_id = %self.terminal_id,
             ?self.phase,
@@ -430,9 +437,29 @@ impl PendingAltScreenRead {
             valid = self.valid,
             "alternate-screen read fell back to passive snapshot"
         );
-        let _ = self.respond_to.send(self.fallback_response);
+        // The passive snapshot holds only the visible alternate screen, which is
+        // shorter than the requested history, so the omitted rows must be reported.
+        self.read.truncated = true;
+        let response = serde_json::to_string(&SuccessResponse {
+            id: self.request_id,
+            result: ResponseResult::PaneRead { read: self.read },
+        })
+        .unwrap_or(self.fallback_response);
+        let _ = self.respond_to.send(response);
         None
     }
+}
+
+/// Chooses how many wheel events the next upward harvest batch sends.
+///
+/// Applications differ in how far one wheel event scrolls. When a batch moved
+/// close to a full page, the next frame would share too few rows with the
+/// previous one for `merge_scrolled_up` to align them, so the batch shrinks
+/// until each step is expected to leave at least half a page of overlap.
+fn next_harvest_events(previous_events: usize, advanced_rows: usize, page_rows: usize) -> usize {
+    let rows_per_event = advanced_rows.div_ceil(previous_events.max(1)).max(1);
+    let target_rows = (page_rows / 2).max(1);
+    (target_rows / rows_per_event).clamp(1, WHEEL_STEP_EVENTS)
 }
 
 pub(crate) type PollOutcome = Option<PendingAltScreenRead>;
@@ -499,7 +526,7 @@ mod tests {
                 tab_id: "w1:t1".into(),
                 source: ReadSource::Recent,
                 format: ReadFormat::Text,
-                text: String::new(),
+                text: "passive\n".into(),
                 revision: 0,
                 truncated: false,
             },
@@ -512,7 +539,7 @@ mod tests {
         (pending, response_rx)
     }
 
-    fn response_text(response_rx: &mpsc::Receiver<String>) -> String {
+    fn response_read(response_rx: &mpsc::Receiver<String>) -> PaneReadResult {
         let response: SuccessResponse = serde_json::from_str(
             &response_rx
                 .recv_timeout(Duration::from_millis(50))
@@ -522,7 +549,32 @@ mod tests {
         let ResponseResult::PaneRead { read } = response.result else {
             panic!("expected pane read response");
         };
-        read.text
+        read
+    }
+
+    fn response_text(response_rx: &mpsc::Receiver<String>) -> String {
+        response_read(response_rx).text
+    }
+
+    fn assert_truncated_passive_fallback(response_rx: &mpsc::Receiver<String>) {
+        let read = response_read(response_rx);
+        assert_eq!(read.text, "passive\n");
+        assert!(
+            read.truncated,
+            "a passive fallback for a history read must report truncation"
+        );
+    }
+
+    #[test]
+    fn harvest_batch_shrinks_only_when_a_batch_nears_a_full_page() {
+        // Measured: three wheel events scrolled 23 of 24 rows in an idle Claude Code pane.
+        assert_eq!(next_harvest_events(3, 23, 24), 1);
+        assert_eq!(next_harvest_events(1, 8, 24), 1);
+        // One row per wheel event keeps the full batch.
+        assert_eq!(next_harvest_events(3, 3, 24), 3);
+        assert_eq!(next_harvest_events(3, 1, 24), 3);
+        // Tiny screens never drop below one event.
+        assert_eq!(next_harvest_events(3, 3, 2), 1);
     }
 
     #[test]
@@ -541,12 +593,7 @@ mod tests {
         assert!(pending
             .poll(Some(&runtime), started + MAX_DURATION)
             .is_none());
-        assert_eq!(
-            response_rx
-                .recv_timeout(Duration::from_millis(50))
-                .expect("fallback response"),
-            "fallback"
-        );
+        assert_truncated_passive_fallback(&response_rx);
 
         drop(runtime);
         drop(_guard);
@@ -573,12 +620,7 @@ mod tests {
         assert!(pending
             .poll(Some(&runtime), started + MAX_DURATION)
             .is_none());
-        assert_eq!(
-            response_rx
-                .recv_timeout(Duration::from_millis(50))
-                .expect("fallback response"),
-            "fallback"
-        );
+        assert_truncated_passive_fallback(&response_rx);
 
         drop(runtime);
         drop(_guard);
@@ -605,12 +647,7 @@ mod tests {
         assert!(pending
             .poll(Some(&runtime), started + MAX_DURATION)
             .is_none());
-        assert_eq!(
-            response_rx
-                .recv_timeout(Duration::from_millis(50))
-                .expect("fallback response"),
-            "fallback"
-        );
+        assert_truncated_passive_fallback(&response_rx);
 
         drop(runtime);
         drop(_guard);
@@ -988,6 +1025,149 @@ mod tests {
             response_text(&response_rx),
             "13\n14\n15\n16\n17\n18\n19\n20\n"
         );
+
+        drop(runtime);
+        drop(_guard);
+        rt.shutdown_timeout(Duration::from_millis(100));
+    }
+
+    #[test]
+    fn unaligned_second_harvest_batch_keeps_harvested_rows_and_reports_truncation() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+        let _guard = rt.enter();
+        let initial = ["16", "17", "18", "19", "20"];
+        let (runtime, mut input_rx) = TerminalRuntime::test_with_channel_capacity(20, 5, 8);
+        runtime.test_process_pty_bytes(&draw(&initial, true));
+        let started = Instant::now();
+        let (pending, response_rx) = pending_read(&runtime, started, 12);
+        let harvest_started = started + INITIAL_QUIET + STEP_TIMEOUT;
+
+        let pending = pending
+            .poll(Some(&runtime), started + INITIAL_QUIET)
+            .expect("bottom probe");
+        input_rx.try_recv().expect("bottom wheel probe");
+        let pending = pending
+            .poll(Some(&runtime), harvest_started)
+            .expect("history harvest");
+        input_rx.try_recv().expect("first upward wheel batch");
+
+        // The first batch scrolls almost a full page: one row of overlap.
+        runtime.test_process_pty_bytes(&draw(&["12", "13", "14", "15", "16"], false));
+        let pending = pending
+            .poll(Some(&runtime), harvest_started + Duration::from_millis(1))
+            .expect("redraw coalescing");
+        let second_batch_at = harvest_started + Duration::from_millis(11);
+        let pending = pending
+            .poll(Some(&runtime), second_batch_at)
+            .expect("second history harvest");
+        input_rx.try_recv().expect("second upward wheel batch");
+
+        // The second batch scrolls a full page: no overlap, so the merge cannot align.
+        runtime.test_process_pty_bytes(&draw(&["5", "6", "7", "8", "9"], false));
+        let pending = pending
+            .poll(Some(&runtime), second_batch_at + Duration::from_millis(1))
+            .expect("unaligned redraw coalescing");
+        let pending = pending
+            .poll(Some(&runtime), second_batch_at + Duration::from_millis(11))
+            .expect("unaligned frame waits for the step timeout");
+        assert!(input_rx.try_recv().is_err());
+        let restore_started = second_batch_at + STEP_TIMEOUT;
+        let pending = pending
+            .poll(Some(&runtime), restore_started)
+            .expect("viewport restore after unaligned frame");
+        input_rx.try_recv().expect("restore wheel batch");
+
+        runtime.test_process_pty_bytes(&draw(&initial, false));
+        let pending = pending
+            .poll(Some(&runtime), restore_started + Duration::from_millis(1))
+            .expect("restore redraw coalescing");
+        assert!(pending
+            .poll(Some(&runtime), restore_started + Duration::from_millis(11))
+            .is_none());
+        let read = response_read(&response_rx);
+        assert_eq!(read.text, "12\n13\n14\n15\n16\n17\n18\n19\n20\n");
+        assert!(
+            read.truncated,
+            "an incomplete history capture must report truncation"
+        );
+
+        drop(runtime);
+        drop(_guard);
+        rt.shutdown_timeout(Duration::from_millis(100));
+    }
+
+    #[test]
+    fn harvest_batches_shrink_after_a_near_page_scroll() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+        let _guard = rt.enter();
+        let initial = ["15", "16", "17", "18", "19", "20"];
+        let (runtime, mut input_rx) = TerminalRuntime::test_with_channel_capacity(20, 6, 8);
+        runtime.test_process_pty_bytes(&draw(&initial, true));
+        let started = Instant::now();
+        let (pending, response_rx) = pending_read(&runtime, started, 13);
+        let harvest_started = started + INITIAL_QUIET + STEP_TIMEOUT;
+
+        let pending = pending
+            .poll(Some(&runtime), started + INITIAL_QUIET)
+            .expect("bottom probe");
+        input_rx.try_recv().expect("bottom wheel probe");
+        let pending = pending
+            .poll(Some(&runtime), harvest_started)
+            .expect("history harvest");
+        let first_batch = input_rx.try_recv().expect("first upward wheel batch");
+        let event_len = first_batch.len() / WHEEL_STEP_EVENTS;
+        assert_eq!(first_batch.len(), event_len * WHEEL_STEP_EVENTS);
+
+        // Three wheel events moved five of six rows: about two rows per event.
+        runtime.test_process_pty_bytes(&draw(&["10", "11", "12", "13", "14", "15"], false));
+        let pending = pending
+            .poll(Some(&runtime), harvest_started + Duration::from_millis(1))
+            .expect("redraw coalescing");
+        let second_batch_at = harvest_started + Duration::from_millis(11);
+        let pending = pending
+            .poll(Some(&runtime), second_batch_at)
+            .expect("second history harvest");
+        let second_batch = input_rx.try_recv().expect("second upward wheel batch");
+        assert_eq!(
+            second_batch.len(),
+            event_len,
+            "the next batch must keep at least half a page of overlap"
+        );
+
+        runtime.test_process_pty_bytes(&draw(&["8", "9", "10", "11", "12", "13"], false));
+        let pending = pending
+            .poll(Some(&runtime), second_batch_at + Duration::from_millis(1))
+            .expect("second redraw coalescing");
+        let restore_started = second_batch_at + Duration::from_millis(11);
+        let pending = pending
+            .poll(Some(&runtime), restore_started)
+            .expect("viewport restore");
+        let restore_batch = input_rx.try_recv().expect("restore wheel batch");
+        assert_eq!(
+            restore_batch.len(),
+            event_len * (WHEEL_STEP_EVENTS + 1),
+            "restore must undo every upward wheel event"
+        );
+
+        runtime.test_process_pty_bytes(&draw(&initial, false));
+        let pending = pending
+            .poll(Some(&runtime), restore_started + Duration::from_millis(1))
+            .expect("restore redraw coalescing");
+        assert!(pending
+            .poll(Some(&runtime), restore_started + Duration::from_millis(11))
+            .is_none());
+        let read = response_read(&response_rx);
+        assert_eq!(
+            read.text,
+            "8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n"
+        );
+        assert!(read.truncated);
 
         drop(runtime);
         drop(_guard);
