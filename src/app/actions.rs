@@ -54,11 +54,16 @@ pub fn is_completion_transition_parts(
             && previous_agent_label == agent_label)
 }
 
+/// Suppression exists so a viewer is not told about a pane they are already
+/// looking at. That only holds while a client is attached: with nothing attached
+/// there is no outer terminal to have focus, and an unreported focus state
+/// (`None`) must not stand in for "someone is watching".
 pub fn active_tab_suppresses_notifications(
     is_active_tab: bool,
+    outer_terminal_attached: bool,
     outer_terminal_focus: Option<bool>,
 ) -> bool {
-    is_active_tab && outer_terminal_focus != Some(false)
+    is_active_tab && outer_terminal_attached && outer_terminal_focus != Some(false)
 }
 
 #[cfg(test)]
@@ -1964,8 +1969,11 @@ impl AppState {
         suppress_completion: bool,
     ) -> Option<bool> {
         let is_active_tab = self.pane_is_in_active_tab(ws_idx, pane_id);
-        let suppress_active_tab_notifications =
-            active_tab_suppresses_notifications(is_active_tab, self.outer_terminal_focus);
+        let suppress_active_tab_notifications = active_tab_suppresses_notifications(
+            is_active_tab,
+            self.outer_terminal_attached,
+            self.outer_terminal_focus,
+        );
         let pane = self.workspaces[ws_idx]
             .tabs
             .iter_mut()
@@ -1998,8 +2006,11 @@ impl AppState {
         self.pending_agent_notifications.remove(&pane_id);
 
         let is_active_tab = self.pane_is_in_active_tab(ws_idx, pane_id);
-        let suppress_active_tab_notifications =
-            active_tab_suppresses_notifications(is_active_tab, self.outer_terminal_focus);
+        let suppress_active_tab_notifications = active_tab_suppresses_notifications(
+            is_active_tab,
+            self.outer_terminal_attached,
+            self.outer_terminal_focus,
+        );
 
         let client_notification_kind = notification_toast_for_effective_state_change(
             suppress_active_tab_notifications,
@@ -2085,8 +2096,11 @@ impl AppState {
         }
 
         let is_active_tab = self.pane_is_in_active_tab(ws_idx, pane_id);
-        let suppress_active_tab_notifications =
-            active_tab_suppresses_notifications(is_active_tab, self.outer_terminal_focus);
+        let suppress_active_tab_notifications = active_tab_suppresses_notifications(
+            is_active_tab,
+            self.outer_terminal_attached,
+            self.outer_terminal_focus,
+        );
         let sound = sound_for_toast_kind(kind, suppress_active_tab_notifications)
             .filter(|_| self.sound.allows(known_agent));
         let build_toast = || {
@@ -2979,6 +2993,7 @@ mod tests {
     fn active_tab_completion_marks_pane_seen() {
         let mut state = app_with_workspaces(&["active"]);
         state.active = Some(0);
+        state.outer_terminal_attached = true;
         state.outer_terminal_focus = Some(true);
         let pane_id = *state.workspaces[0].panes.keys().next().unwrap();
         let terminal_id = state.workspaces[0]
@@ -3004,6 +3019,33 @@ mod tests {
         assert_eq!(terminal.state, AgentState::Idle);
         let pane = state.workspaces[0].panes.get(&pane_id).unwrap();
         assert!(pane.seen);
+    }
+
+    #[test]
+    fn active_tab_completion_marks_pane_unseen_when_no_client_is_attached() {
+        let mut state = app_with_workspaces(&["active"]);
+        state.active = Some(0);
+        let pane_id = *state.workspaces[0].panes.keys().next().unwrap();
+        let terminal_id = state.workspaces[0]
+            .panes
+            .get(&pane_id)
+            .unwrap()
+            .attached_terminal_id
+            .clone();
+        state.terminals.get_mut(&terminal_id).unwrap().state = AgentState::Working;
+
+        state.handle_app_event(AppEvent::StateChanged {
+            pane_id,
+            agent: Some(Agent::Pi),
+            state: AgentState::Idle,
+            visible_blocker: false,
+            visible_working: false,
+            process_exited: false,
+            observed_at: std::time::Instant::now(),
+        });
+
+        let pane = state.workspaces[0].panes.get(&pane_id).unwrap();
+        assert!(!pane.seen);
     }
 
     #[test]
@@ -3264,6 +3306,7 @@ mod tests {
     fn delayed_background_waiting_is_suppressed_if_pane_becomes_active() {
         let mut state = app_with_workspaces(&["active", "background"]);
         state.active = Some(0);
+        state.outer_terminal_attached = true;
         state.toast_config.delivery = crate::config::ToastDelivery::Herdr;
         state.toast_config.delay_seconds = 1;
         let bg_pane_id = *state.workspaces[1].panes.keys().next().unwrap();
@@ -3779,10 +3822,30 @@ mod tests {
 
     #[test]
     fn active_tab_suppression_preserves_unknown_focus_behavior() {
-        assert!(active_tab_suppresses_notifications(true, None));
-        assert!(active_tab_suppresses_notifications(true, Some(true)));
-        assert!(!active_tab_suppresses_notifications(true, Some(false)));
-        assert!(!active_tab_suppresses_notifications(false, None));
+        let attached = true;
+        assert!(active_tab_suppresses_notifications(true, attached, None));
+        assert!(active_tab_suppresses_notifications(
+            true,
+            attached,
+            Some(true)
+        ));
+        assert!(!active_tab_suppresses_notifications(
+            true,
+            attached,
+            Some(false)
+        ));
+        assert!(!active_tab_suppresses_notifications(false, attached, None));
+    }
+
+    #[test]
+    fn active_tab_suppression_needs_an_attached_client() {
+        let detached = false;
+        assert!(!active_tab_suppresses_notifications(true, detached, None));
+        assert!(!active_tab_suppresses_notifications(
+            true,
+            detached,
+            Some(true)
+        ));
     }
 
     #[test]

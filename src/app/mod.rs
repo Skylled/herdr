@@ -476,6 +476,7 @@ impl App {
             config_diagnostic,
             toast: None,
             pending_agent_notifications: std::collections::HashMap::new(),
+            outer_terminal_attached: false,
             outer_terminal_focus: None,
             prefix_code,
             prefix_mods,

@@ -817,6 +817,7 @@ impl HeadlessServer {
         }
         let Some(client_id) = self.foreground_client_id else {
             self.effective_size = self.headless_size;
+            self.app.state.outer_terminal_attached = false;
             self.app.state.outer_terminal_focus = None;
             self.app.state.host_cell_size = crate::kitty_graphics::HostCellSize::default();
             self.sync_runtime_view_geometry();
@@ -828,6 +829,7 @@ impl HeadlessServer {
         let Some(client) = self.clients.get(&client_id) else {
             self.foreground_client_id = None;
             self.effective_size = self.headless_size;
+            self.app.state.outer_terminal_attached = false;
             self.app.state.outer_terminal_focus = None;
             self.app.state.host_cell_size = crate::kitty_graphics::HostCellSize::default();
             self.sync_runtime_view_geometry();
@@ -851,6 +853,7 @@ impl HeadlessServer {
 
         self.effective_size = terminal_size;
         self.sync_runtime_view_geometry();
+        self.app.state.outer_terminal_attached = true;
         self.app.state.outer_terminal_focus = outer_terminal_focus;
         self.app.state.host_cell_size = host_cell_size;
         let server_keybindings = self.server_keybindings.clone();
@@ -900,9 +903,15 @@ impl HeadlessServer {
         self.clients.get(&client_id)?.outer_terminal_focus
     }
 
+    fn has_foreground_client(&self) -> bool {
+        self.foreground_client_id
+            .is_some_and(|client_id| self.clients.contains_key(&client_id))
+    }
+
     fn active_tab_suppresses_notifications(&self, is_active_tab: bool) -> bool {
         crate::app::actions::active_tab_suppresses_notifications(
             is_active_tab,
+            self.has_foreground_client(),
             self.foreground_client_outer_focus(),
         )
     }
