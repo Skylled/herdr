@@ -6583,3 +6583,178 @@ fn no_handle_internal_event_bypass_in_module() {
         bypass_lines.join("\n  ")
     );
 }
+
+/// Quest Log #55 live repro, at the level the unit tests missed.
+///
+/// The unit tests in app::actions drive `handle_app_event` directly and read
+/// `pane.seen` straight afterwards. That skips the client-attach path entirely.
+/// This one attaches a focused client first, the way a human sitting on the pane
+/// does, and then asks what the API actually EMITTED -- which is the only thing a
+/// plugin hook ever sees.
+fn focused_client_completion_emitted_status(
+    outer_terminal_focus: Option<bool>,
+    attach_client: bool,
+) -> Option<crate::api::schema::AgentStatus> {
+    let event_hub = api::EventHub::default();
+    let mut server = test_headless_server_with_event_hub(event_hub);
+    let mut workspace = crate::workspace::Workspace::test_new("active");
+    let pane_id = workspace.tabs[0].root_pane;
+    let (runtime, _input) =
+        crate::terminal::TerminalRuntime::test_with_channel_and_scrollback_bytes(80, 24, 0, b"", 4);
+    workspace.insert_test_runtime(pane_id, runtime);
+    server.app.state.workspaces = vec![workspace];
+    server.app.state.active = Some(0);
+    server.app.state.selected = 0;
+    server.app.state.mode = crate::app::Mode::Terminal;
+    server.app.state.ensure_test_terminals();
+
+    if attach_client {
+        let (_control, _render) = connect_matching_test_shell(&mut server, 70);
+        server.clients.get_mut(&70).unwrap().outer_terminal_focus = outer_terminal_focus;
+        server.promote_client_to_foreground(70);
+        server.sync_foreground_client_state();
+    } else {
+        server.app.state.outer_terminal_focus = outer_terminal_focus;
+    }
+
+    let terminal_id = server.app.state.workspaces[0]
+        .pane_state(pane_id)
+        .expect("pane")
+        .attached_terminal_id
+        .clone();
+    server
+        .app
+        .state
+        .terminals
+        .get_mut(&terminal_id)
+        .unwrap()
+        .state = crate::detect::AgentState::Working;
+
+    let baseline = server.app.event_hub.events_after(0).len() as u64;
+
+    server
+        .app
+        .handle_internal_event_with_pane_updates(crate::events::AppEvent::StateChanged {
+            pane_id,
+            agent: Some(crate::detect::Agent::Pi),
+            state: crate::detect::AgentState::Idle,
+            visible_blocker: false,
+            visible_working: false,
+            process_exited: false,
+            observed_at: Instant::now(),
+        });
+    // A real server syncs client state around event handling; do it here too so
+    // the test sees whatever that does to the completion latch.
+    server.sync_foreground_client_state();
+
+    let emitted = server
+        .app
+        .event_hub
+        .events_after(baseline)
+        .iter()
+        .filter_map(|(_, event)| match &event.data {
+            crate::api::schema::EventData::PaneAgentStatusChanged { agent_status, .. } => {
+                Some(*agent_status)
+            }
+            _ => None,
+        })
+        .next_back();
+    shutdown_test_runtimes(&mut server);
+    emitted
+}
+
+#[tokio::test]
+async fn focused_attached_client_completion_emits_done() {
+    assert_eq!(
+        focused_client_completion_emitted_status(Some(true), true),
+        Some(crate::api::schema::AgentStatus::Done),
+        "a turn ending on a focused pane must still emit done"
+    );
+}
+
+/// The regression test for the fix. Quest Log #55.
+///
+/// The bug this catches is NOT in the completion latch -- that was already
+/// correct. It is that `sync_foreground_client_state` used to call
+/// `mark_active_tab_seen()` on every sync while the outer terminal reported
+/// focus, which set `pane.seen = true` and erased a completion nobody had
+/// consumed. The emitted event still said `Done`, so any test asserting only on
+/// the event passed; every consumer that re-derives status from live pane state
+/// (plugin context via `pane_info`, `session.snapshot`, `session_list`) read
+/// `idle`. That is what a hook actually sees, so that is what this asserts.
+#[tokio::test]
+async fn focused_client_sync_does_not_erase_a_completion() {
+    let event_hub = api::EventHub::default();
+    let mut server = test_headless_server_with_event_hub(event_hub);
+    let mut workspace = crate::workspace::Workspace::test_new("active");
+    let pane_id = workspace.tabs[0].root_pane;
+    let (runtime, _input) =
+        crate::terminal::TerminalRuntime::test_with_channel_and_scrollback_bytes(80, 24, 0, b"", 4);
+    workspace.insert_test_runtime(pane_id, runtime);
+    server.app.state.workspaces = vec![workspace];
+    server.app.state.active = Some(0);
+    server.app.state.selected = 0;
+    server.app.state.mode = crate::app::Mode::Terminal;
+    server.app.state.ensure_test_terminals();
+
+    let (_control, _render) = connect_matching_test_shell(&mut server, 71);
+    server.clients.get_mut(&71).unwrap().outer_terminal_focus = Some(true);
+    server.promote_client_to_foreground(71);
+    server.sync_foreground_client_state();
+
+    let terminal_id = server.app.state.workspaces[0]
+        .pane_state(pane_id)
+        .expect("pane")
+        .attached_terminal_id
+        .clone();
+    server
+        .app
+        .state
+        .terminals
+        .get_mut(&terminal_id)
+        .unwrap()
+        .state = crate::detect::AgentState::Working;
+
+    server
+        .app
+        .handle_internal_event_with_pane_updates(crate::events::AppEvent::StateChanged {
+            pane_id,
+            agent: Some(crate::detect::Agent::Pi),
+            state: crate::detect::AgentState::Idle,
+            visible_blocker: false,
+            visible_working: false,
+            process_exited: false,
+            observed_at: Instant::now(),
+        });
+
+    // The real server syncs client state continuously. This is the step that used
+    // to erase the latch.
+    for _ in 0..3 {
+        server.sync_foreground_client_state();
+    }
+
+    let pane = server.app.state.workspaces[0]
+        .pane_state(pane_id)
+        .expect("pane");
+    assert_eq!(
+        server.app.state.terminals.get(&terminal_id).unwrap().state,
+        crate::detect::AgentState::Idle
+    );
+    // `seen == false` on an Idle pane is precisely what pane_agent_status turns
+    // into AgentStatus::Done. The live repro on an isolated server confirmed the
+    // snapshot reads `idle` whenever this bit gets flipped back.
+    assert!(
+        !pane.seen,
+        "a focused attached client must not erase an unconsumed completion"
+    );
+    shutdown_test_runtimes(&mut server);
+}
+
+#[tokio::test]
+async fn detached_completion_emits_done() {
+    assert_eq!(
+        focused_client_completion_emitted_status(None, false),
+        Some(crate::api::schema::AgentStatus::Done),
+        "a turn ending with no client attached must emit done"
+    );
+}

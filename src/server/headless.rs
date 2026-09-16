@@ -856,9 +856,20 @@ impl HeadlessServer {
         let server_keybindings = self.server_keybindings.clone();
         apply_keybindings(&mut self.app, &server_keybindings);
         self.sync_visible_server_config_diagnostic(false);
-        if outer_terminal_focus == Some(true) {
-            self.app.state.mark_active_tab_seen();
-        }
+        // CANDIDATE FIX (#55): do NOT acknowledge completions here.
+        //
+        // This ran on every client-state sync while the outer terminal reported
+        // focus -- an ambient condition, not a user action -- and
+        // mark_active_tab_seen() sets pane.seen = true, which is the same bit that
+        // makes AgentStatus::Done. So a completion latched by
+        // apply_pane_state_change was erased moments later, and every consumer
+        // that re-derives status from live pane state (plugin context via
+        // pane_info, session.snapshot, session_list) read `idle`.
+        //
+        // Acknowledgement should follow an actual user action. The explicit
+        // navigation callers -- handle_pane_focus and focus_agent_target -- still
+        // call mark_active_tab_seen, so looking at a pane still clears it.
+        // Merely having a focused client attached no longer does.
         self.app.set_host_terminal_appearance_state(
             host_terminal_appearance,
             host_terminal_appearance_explicit,
