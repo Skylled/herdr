@@ -63,8 +63,10 @@ next person will otherwise wonder.
 
 ## Patches
 
-All three are on `master`. None are pushed: `origin/master` is 84 commits ahead,
-so publishing `master` is blocked behind the base decision below.
+Patches 1-3 are on `master`; patch 4 is superseded and unmerged. `master` is not
+pushed under its own name: `origin/master` is 84 commits ahead, so the fork's line
+of development is published as the `fork/master` branch instead. See
+[Base decision](#base-decision).
 
 ### 1. Alternate-screen read truncation — Quest Log #14
 
@@ -109,19 +111,56 @@ toast suppression is untouched and still focus-driven — it is computed separat
 in `record_or_deliver_agent_notification`, so a human watching a pane still gets
 no beep and no toast.
 
+**This patch alone did not fix #55.** It is necessary and was not sufficient; see
+patch 3. Installing it and declaring the bug fixed, on the strength of 443 passing
+tests and a code-reading argument, was wrong — a live test disproved it in about
+thirty seconds. The lesson is recorded on #55 and is the reason patch 3 was
+developed against a reproduction instead.
+
 - **Merged:** yes.
-- **Installed:** yes, 2026-09-15. See [Installed](#installed).
+- **Installed:** yes, 2026-09-15, in `0.9.0+fork.1`.
 - **Upstream:** no, and it should not go. For a human-facing multiplexer, staying
   quiet about a pane the human is watching is a defensible product choice. It is
   wrong for us because our consumer is a program that is never watching.
-- **Not verified live:** **outstanding.** Installed and running since 2026-09-15,
-  but nobody has yet observed a focused-pane completion emitting a `done` event on
-  it. Until someone runs that test, this patch is verified only by unit tests and
-  code reading. The test is the #55 repro in reverse: prompt a session with its
-  pane focused, stay on it, and expect the event in about ten seconds rather than
-  never.
 
-### 3. Completion suppressed when no client attached — superseded
+### 3. Completion erased by a focused client — Quest Log #55
+
+`65a92729` · `src/server/headless.rs`
+
+The other half of #55, and the half that actually made the symptom. Patch 2
+latches the completion correctly and `PaneAgentStatusChanged` really is emitted
+carrying `Done` — that much was confirmed by instrumenting a running server. But
+`sync_foreground_client_state` then called `mark_active_tab_seen()` on **every**
+client-state sync while the outer terminal reported focus. That is an ambient
+condition, not a user action, and it sets `pane.seen = true` — the same bit that
+makes `AgentStatus::Done`. The completion was erased moments after being latched.
+
+This is why event-level tests passed while the bug was live: **a hook does not
+read status from the event payload.** The plugin context is built by `pane_info`
+from current pane state, as are `session.snapshot` and `session_list`. Every one
+of them re-derives, so every one of them read `idle`.
+
+Acknowledgement now follows an actual user action. `handle_pane_focus` and
+`focus_agent_target` still call `mark_active_tab_seen`, so navigating to a pane
+still clears it; merely having a focused client attached no longer does.
+
+- **Merged:** yes.
+- **Installed:** yes, 2026-09-15, in `0.9.0+fork.1`.
+- **Upstream:** no. Same reasoning as patch 2.
+- **Verified against a reproduction, not by reading.** An isolated named herdr
+  session driven with no human: pty-attached client, `ESC[I` injected as outer
+  focus, `working`/`idle` driven through `pane.report_agent`. Before: focused
+  yields `idle`, unfocused yields `done`, repeatably. After: `done` in all three
+  conditions. The regression test fails with the fix reverted and passes with it —
+  a negative control that patch 2's tests never had.
+- **Known consequence:** a human sitting on a focused pane now sees the done marker
+  persist until they navigate, rather than it clearing under them.
+- **Not verified on the fleet:** **outstanding, and #55 stays open until it is.**
+  The harness proves this against an isolated server. The acceptance test is the
+  real thing: attach a shell, focus a pane, send a session a one-line question, and
+  the done event should reach Ace within about ten seconds.
+
+### 4. Completion suppressed when no client attached — superseded
 
 Branch `fix/done-suppressed-when-no-client-attached` (`6a46ebed`) · **not merged,
 and the recommendation is not to merge it.**
@@ -130,7 +169,7 @@ The earlier, narrower fix for #55: `outer_terminal_focus` defaults to `None` and
 `None != Some(false)`, so with nothing attached Herdr concluded a human was
 watching. It adds an `outer_terminal_attached` bool to the predicate.
 
-Patch 2 supersedes it. It removed the predicate from the completion path
+Patches 2 and 3 supersede it. It removed the predicate from the completion path
 altogether, which covers the detached case *and* the focused case the narrower fix
 never addressed. What remains of `6a46ebed` is a behavioural change to sound and
 toast state while detached — real, since the predicate is still live at
@@ -143,15 +182,16 @@ untested part. The branch is kept as the record of that investigation.
 
 ## Installed
 
-Currently installed and running: **0.9.0 + patch 1 + patch 2**, built from
-`a09edf99`, installed and restarted 2026-09-15.
+Currently installed: **`0.9.0+fork.1`** — patches 1, 2 and 3 — built from
+`1ad17cb6`, installed 2026-09-15.
 
 Verify with **exactly** one of these two commands — the digest you get depends on
 which, and they are not comparable:
 
 ```sh
-shasum -a 256 ~/.local/bin/herdr   # c7e140b218e8d35b77b035a17b688777846f716143b90b5467e1b3b693877d80
-shasum -a 1   ~/.local/bin/herdr   # 19c16da4d2ca586061f00bba8c042374db3e2536
+herdr --version                    # 0.9.0+fork.1   <- since fork.1, this is enough
+shasum -a 256 ~/.local/bin/herdr   # 6cb85acdaa3c28b2d6ff187a22dd5374500f45edc84fa83eba64cc00270110e6
+shasum -a 1   ~/.local/bin/herdr   # fccfb29ae4e088712a9718b23c0d0eea9ccb7906
 ```
 
 > **`shasum` with no `-a` is SHA-1, not SHA-256.** Both digests above are correct
@@ -163,7 +203,18 @@ shasum -a 1   ~/.local/bin/herdr   # 19c16da4d2ca586061f00bba8c042374db3e2536
 Digests are written in full throughout. A truncated hash is not comparable and
 invites the same mistake this section is about.
 
-**`~/.local/bin/herdr`** — 0.9.0 + patch 1 + patch 2, built from `a09edf99`:
+**`~/.local/bin/herdr`** — `0.9.0+fork.1`, patches 1-3, built from `1ad17cb6`:
+
+- SHA-256 `6cb85acdaa3c28b2d6ff187a22dd5374500f45edc84fa83eba64cc00270110e6`
+- SHA-1 &nbsp;&nbsp;`fccfb29ae4e088712a9718b23c0d0eea9ccb7906`
+
+Reproducible: a full `cargo clean -p herdr` and rebuild produced a byte-identical
+binary, which is how this artefact was reconciled against the instrumented and
+candidate builds that had been sitting in `target/release/` during the #55
+investigation.
+
+**`~/.local/bin/herdr.bak-0.9.0-fork0-20260915b`** — 0.9.0 + patches 1 and 2, the
+unlabelled build that ran 2026-09-15 19:36 to 21:05:
 
 - SHA-256 `c7e140b218e8d35b77b035a17b688777846f716143b90b5467e1b3b693877d80`
 - SHA-1 &nbsp;&nbsp;`19c16da4d2ca586061f00bba8c042374db3e2536`
@@ -179,45 +230,63 @@ that ran 2026-09-11 to 2026-09-15:
 - SHA-256 `32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17`
 - SHA-1 &nbsp;&nbsp;`88bc05f68abe28d65536414ce5844b110679bc7f`
 
-`herdr --version` reports `0.9.0` for every one of these. **It does not
-distinguish our builds from stock, or from each other.** Hash the file — and see
-[Version suffix](#version-suffix-planned) for the plan to fix that.
+Everything from `fork.1` onward identifies itself: `herdr --version` and the API
+`version` field both report `0.9.0+fork.1`. **The three older binaries above all
+report a bare `0.9.0` and cannot be told apart except by hashing.**
 
 **An install is not live until the server restarts.** The running process keeps
 serving the old image; install and restart are separate events and only the second
 changes behaviour.
 
-## Version suffix (planned)
+## Version label
 
-**Do this on the next build.** Not retrofitted to the current one — changing the
-version string means another build, install and restart, which is not worth it for
-a label.
+Our builds report **`0.9.0+fork.N`** — upstream's version, then semver build
+metadata naming ours. Shipped in `fork.1`, 2026-09-15.
 
-The problem is above: `herdr --version` says `0.9.0` for stock and for every build
-we make, so a checksum is currently the only honest answer to "what is this". It
-is also why `session_list`'s `probedVersion` carries no information today.
+**Bump `FORK_BUILD` in `src/build_info.rs` once per INSTALLED build**, in the same
+commit that records the new digest above. Builds that are never installed do not
+get a number; the counter tracks what has actually run, which is the question this
+file exists to answer. It is a plain counter rather than a git SHA because the SHA
+is already recorded against the checksum, and a counter is short enough to read
+aloud.
 
-Proposed form: **`0.9.0+fork.N`** — upstream's version, then a `+` build-metadata
-suffix with a counter we bump per installed build. So tonight's binary would have
-been `0.9.0+fork.1` and the next is `0.9.0+fork.2`.
+Where it shows up: `herdr --version`, and the API `version` field — so
+`session_list` now distinguishes our build from stock without hashing anything.
 
-Why this form:
+### Where the label lives, and why not in Cargo.toml
 
-- `+`-prefixed build metadata is the semver-designated place for exactly this, and
-  semver says it is **ignored for precedence** — `0.9.0+fork.2` compares equal to
-  `0.9.0`. Anything doing a version comparison, including upstream's own update
-  check, keeps working and will not think we are ahead of or behind a real release.
-- It never collides with an upstream version, so adopting a new base is just
-  changing the part in front of the `+`.
-- A plain counter, not a git SHA: it stays short, it is readable aloud, and the SHA
-  is already recorded here against the checksum. Bump it in the same commit that
-  records the new digest.
+`FORK_BUILD` is a constant in `src/build_info.rs`. It must **not** move into
+`Cargo.toml`. `update::Version::parse` splits `CARGO_PKG_VERSION` on `.` and
+requires exactly three integer parts, and `Version::current()` calls `.expect()`
+on the result — so a `0.9.0+fork.1` there panics the update checker at runtime.
+Keeping `BASE_VERSION` a clean `0.9.0` means every comparison is untouched and
+only the display and API strings carry the label. `build_info` has a test
+asserting this invariant; if it fails, do not "fix" it by loosening the assert.
 
-**Constraint: it must not break anything that parses the version.** Before
-shipping it, check the update checker, any `probedVersion` consumer in Earshot, and
-the CLI's own version handling for exact-string comparisons against `0.9.0` or for
-parsers that reject a `+` suffix. A label that breaks the update check is worse
-than no label.
+`+` is build metadata, which semver defines as **ignored for precedence**, so
+`0.9.0+fork.1` compares equal to `0.9.0` and a genuine upstream release still
+reads as newer.
+
+### What was checked before shipping it
+
+The constraint this file recorded was that the label must not break anything
+parsing the version. All four were checked:
+
+- **Update checker** — uses `BASE_VERSION`, not `version()`. Unaffected.
+- **Protocol handshake** — carries `server_version`, but only logs it. No equality
+  test anywhere in the tree; compatibility gates on `PROTOCOL_VERSION` and codecs.
+- **Handoff** — `server/handoff.rs` compares `expected_version` against our own
+  `version()`. Both sides are the same binary, so it stays self-consistent.
+- **Earshot** — reports the live version but never compares it, and
+  `PROBED_HERDR_VERSION` is Earshot's own hardcoded constant, unrelated to what
+  the server reports.
+
+**One real breakage was found and fixed rather than shipped.** Release notes and
+product announcements are keyed by version string, and a "seen" marker stored for
+`0.9.0` would never match `0.9.0+fork.1` — so the notes would have reappeared on
+every startup, forever. They now use `build_info::release_version()`, which is
+`version()` without our label. 18 tests caught it. If you add another
+version-keyed store, key it on `release_version()`, not `version()`.
 
 ## Installing
 
@@ -257,9 +326,11 @@ cp target/release/herdr ~/.local/bin/herdr.new
 chmod +x ~/.local/bin/herdr.new
 mv ~/.local/bin/herdr.new ~/.local/bin/herdr
 
-# 3. record BOTH digests here, and bump the version suffix in the same commit
+# 3. record BOTH digests here. Bump FORK_BUILD in src/build_info.rs in the
+#    same commit -- the counter tracks installed builds, not every build.
 shasum -a 256 ~/.local/bin/herdr
 shasum -a 1   ~/.local/bin/herdr
+herdr --version
 
 # 4. stop, confirm the socket is clear, then start -- panes survive this.
 #    Do NOT bootout: that SIGKILLs the process group and kills every pane.
