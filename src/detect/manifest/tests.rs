@@ -1350,3 +1350,84 @@ fn antigravity_permission_prompt_does_not_match_ordinary_output() {
         Some("permission_prompt")
     );
 }
+
+#[test]
+fn antigravity_folder_trust_dialog_is_blocked_not_idle() {
+    // Captured verbatim from agy 1.2.5 on first launch in an untrusted
+    // workspace (#104, finding 8). The modal cannot proceed without a
+    // keypress, but the manifest had no rule for it, so detection fell through
+    // to default_known_agent_idle_fallback and the pane reported idle — a pane
+    // claiming it was at a prompt while it was holding a question.
+    let screen = concat!(
+        "Accessing workspace:\n",
+        "\n",
+        "/private/tmp/agyprobe\n",
+        "\n",
+        "Do you trust the contents of this project?\n",
+        "\n",
+        "Antigravity CLI requires permission to read, edit, and execute files here.\n",
+        "\n",
+        "> Yes, I trust this folder\n",
+        "  No, exit\n",
+        "\n",
+        "  \u{2191}/\u{2193} Navigate \u{b7} enter Confirm\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_eq!(result.state, AgentState::Blocked);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("folder_trust_dialog")
+    );
+    assert!(result.visible_blocker);
+    assert!(!result.visible_idle);
+}
+
+#[test]
+fn antigravity_folder_trust_dialog_does_not_match_prose_about_it() {
+    // The gate phrase alone must not be enough. A session discussing the trust
+    // modal carries the question but none of its option list, so the `any`
+    // branch is what keeps ordinary transcript output out of `blocked`.
+    let screen = concat!(
+        "\u{25cf} Bash(cat notes.md) (ctrl+o to expand)\n",
+        "\n",
+        "  On first launch agy asks: Do you trust the contents of this project?\n",
+        "  Answering it is what marks the workspace trusted.\n",
+        "\n",
+        "> \n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_ne!(result.state, AgentState::Blocked);
+    assert_ne!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("folder_trust_dialog")
+    );
+}
+
+#[test]
+fn antigravity_permission_prompt_still_wins_after_trust_rule_added() {
+    // folder_trust_dialog sits above permission_prompt in priority. The two
+    // modals cannot co-occur, but the permission dialog must keep matching its
+    // own rule rather than being disturbed by the new one.
+    let screen = concat!(
+        "Requesting permission for:\n",
+        "   echo q104-strict-probe\n",
+        "\n",
+        "Run this command?\n",
+        "> 1. Yes, run command\n",
+        "  2. No, cancel\n",
+        "\n",
+        "  \u{2191}/\u{2193} Navigate \u{b7} tab Amend \u{b7} ctrl+g edit/expand command\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_eq!(result.state, AgentState::Blocked);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("permission_prompt")
+    );
+}

@@ -160,6 +160,49 @@ still clears it; merely having a focused client attached no longer does.
   real thing: attach a shell, focus a pane, send a session a one-line question, and
   the done event should reach Ace within about ten seconds.
 
+### 5. Antigravity reports a false state on its two modals — Quest Log #104
+
+`832d3ebc`, and the `folder_trust_dialog` rule alongside this entry ·
+`src/detect/manifests/antigravity.toml`
+
+Both halves are manifest-only: detection rules, no engine or state-machine change.
+
+**The permission dialog (`832d3ebc`, installed).** The bundled `permission_prompt`
+rule required the literal `edit command`. agy 1.2.5 renders that footer hint as
+`ctrl+g edit/expand command`, and `contains` is an AND (`manifest.rs:1241`), so the
+branch dropped out and took the rule with it. The pane reported `idle`, and
+`herdr agent get` reported `agent_status: done`, while sitting on an unanswered
+question. Replaced with `tab amend` plus a bounded same-line regex
+`(?i)\bedit\b[^\n]{0,32}\bcommand\b`, a superset of the string it replaced.
+
+**The startup trust dialog (not installed).** agy's first-launch modal — *"Do you
+trust the contents of this project?"* — had no rule at all, so detection fell
+through to `default_known_agent_idle_fallback` and the pane reported `idle` while
+holding a modal that cannot proceed without a keypress. Same shape of fix and the
+same shape as the existing `qwen:folder_trust_dialog` and `codex:trust_directory`
+rules: `state = "blocked"`, `visible_blocker = true`, gated on the question and
+then on the option list, so prose that merely mentions the modal cannot match.
+`bottom_non_empty_lines(20)`, not `top_non_empty_lines`, because the latter needs
+`min_engine_version >= 3` (`manifest.rs:1333`) and this manifest declares 1.
+
+The manifest `version` is bumped on each change, which is load-bearing:
+`read_remote_manifest` prefers the bundled copy only when the cached remote version
+is strictly older (`manifest.rs:770-784`).
+
+- **Merged:** yes, both on `master`.
+- **Installed:** the matcher only, 2026-09-17, in `0.9.0+fork.2`. **The trust-dialog
+  rule is committed but NOT installed** — it needs a build, an install and a
+  restart, and until then a trust dialog still reports `idle` on this machine.
+- **Upstream:** worth reporting as a bug. Manifests are data, the wording drift is
+  upstream's to track, and neither fix is fork-specific. Bug-report path only; see
+  the policy note above.
+- **Verified live, not by reading.** The permission fix was re-measured in
+  production after install against a *natural* dialog — `toolPermission: strict` in
+  an isolated `HOME`, no hook forcing it — and read `blocked` / rule
+  `permission_prompt` / `visible_blocker=true`, with Earshot agreeing
+  (`answerability: "blocked"`, `answerable: false`). Each rule's test fails with its
+  rule reverted and passes with it.
+
 ### 4. Completion suppressed when no client attached — superseded
 
 Branch `fix/done-suppressed-when-no-client-attached` (`6a46ebed`) · **not merged,
@@ -182,16 +225,18 @@ untested part. The branch is kept as the record of that investigation.
 
 ## Installed
 
-Currently installed: **`0.9.0+fork.1`** — patches 1, 2 and 3 — built from
-`1ad17cb6`, installed 2026-09-15.
+Currently installed: **`0.9.0+fork.2`** — patches 1, 2, 3 and the matcher half of
+patch 5 — built from `85c3edac`, installed 2026-09-17.
+
+The trust-dialog half of patch 5 is on `master` but **not in this binary.**
 
 Verify with **exactly** one of these two commands — the digest you get depends on
 which, and they are not comparable:
 
 ```sh
-herdr --version                    # 0.9.0+fork.1   <- since fork.1, this is enough
-shasum -a 256 ~/.local/bin/herdr   # 6cb85acdaa3c28b2d6ff187a22dd5374500f45edc84fa83eba64cc00270110e6
-shasum -a 1   ~/.local/bin/herdr   # fccfb29ae4e088712a9718b23c0d0eea9ccb7906
+herdr --version                    # 0.9.0+fork.2   <- since fork.1, this is enough
+shasum -a 256 ~/.local/bin/herdr   # 875e733ee9b43e95469a9d0767ca4528be9e9c04ddf4ec90d9d4e38e0545a52f
+shasum -a 1   ~/.local/bin/herdr   # 7b37f7ba9d02370aff11e9845b679620e8c11dbd
 ```
 
 > **`shasum` with no `-a` is SHA-1, not SHA-256.** Both digests above are correct
@@ -203,13 +248,21 @@ shasum -a 1   ~/.local/bin/herdr   # fccfb29ae4e088712a9718b23c0d0eea9ccb7906
 Digests are written in full throughout. A truncated hash is not comparable and
 invites the same mistake this section is about.
 
-**`~/.local/bin/herdr`** — `0.9.0+fork.1`, patches 1-3, built from `1ad17cb6`:
+**`~/.local/bin/herdr`** — `0.9.0+fork.2`, patches 1-3 and the matcher half of
+patch 5, built from `85c3edac`, installed 2026-09-17:
+
+- SHA-256 `875e733ee9b43e95469a9d0767ca4528be9e9c04ddf4ec90d9d4e38e0545a52f`
+- SHA-1 &nbsp;&nbsp;`7b37f7ba9d02370aff11e9845b679620e8c11dbd`
+
+**`~/.local/bin/herdr.bak`** — `0.9.0+fork.1`, patches 1-3, built from `1ad17cb6`,
+the image that ran 2026-09-15 to 2026-09-17. This is the rollback target, and it
+is the unsuffixed `.bak`, so the next install will overwrite it:
 
 - SHA-256 `6cb85acdaa3c28b2d6ff187a22dd5374500f45edc84fa83eba64cc00270110e6`
 - SHA-1 &nbsp;&nbsp;`fccfb29ae4e088712a9718b23c0d0eea9ccb7906`
 
-Reproducible: a full `cargo clean -p herdr` and rebuild produced a byte-identical
-binary, which is how this artefact was reconciled against the instrumented and
+Reproducible (of `fork.1`): a full `cargo clean -p herdr` and rebuild produced a
+byte-identical binary, which is how that artefact was reconciled against the instrumented and
 candidate builds that had been sitting in `target/release/` during the #55
 investigation.
 
@@ -231,7 +284,7 @@ that ran 2026-09-11 to 2026-09-15:
 - SHA-1 &nbsp;&nbsp;`88bc05f68abe28d65536414ce5844b110679bc7f`
 
 Everything from `fork.1` onward identifies itself: `herdr --version` and the API
-`version` field both report `0.9.0+fork.1`. **The three older binaries above all
+`version` field both report `0.9.0+fork.N`. **The three older binaries above all
 report a bare `0.9.0` and cannot be told apart except by hashing.**
 
 **An install is not live until the server restarts.** The running process keeps

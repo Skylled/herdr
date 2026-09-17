@@ -1,5 +1,5 @@
 id = "agy"
-version = "2026.09.17.1"
+version = "2026.09.17.2"
 min_engine_version = 1
 updated_at = "2026-09-17T00:00:00Z"
 aliases = ["antigravity", "antigravity-cli"]
@@ -17,6 +17,21 @@ any = [
   # "ctrl+g edit/expand command" (1.2.5). Match edit..command on one line with a
   # short gap so a further wording change does not silently drop the branch.
   { contains = ["tab amend"], regex = ['(?i)\bedit\b[^\n]{0,32}\bcommand\b'] },
+]
+
+[[rules]]
+id = "folder_trust_dialog"
+state = "blocked"
+priority = 310
+region = "bottom_non_empty_lines(20)"
+visible_blocker = true
+# agy's startup modal: it cannot proceed without a keypress, so the pane is
+# blocked, not idle. Gate on the question, then confirm the option list is
+# really on screen so prose that merely mentions the modal cannot match.
+contains = ["do you trust the contents of this project?"]
+any = [
+  { contains = ["yes, i trust this folder"] },
+  { contains = ["no, exit"] },
 ]
 
 [[rules]]
