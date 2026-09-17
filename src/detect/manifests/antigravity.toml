@@ -1,5 +1,5 @@
 id = "agy"
-version = "2026.09.17.2"
+version = "2026.09.17.3"
 min_engine_version = 1
 updated_at = "2026-09-17T00:00:00Z"
 aliases = ["antigravity", "antigravity-cli"]
@@ -49,3 +49,26 @@ priority = 90
 region = "bottom_non_empty_lines(5)"
 visible_working = true
 line_regex = ['(?i)·\s*[1-9][0-9]*\s+task']
+
+[[rules]]
+id = "live_prompt_box"
+state = "idle"
+priority = 50
+region = "bottom_non_empty_lines(10)"
+visible_idle = true
+# agy's prompt box: an empty prompt line (">") framed by two horizontal rules
+# (at least 20 box-drawing characters). The rule is anchored to the foot of
+# the region (\z) so text typed below the box or prose containing rules cannot
+# match. Mid-turn screens keep drawing the prompt box, so the not-gates veto
+# active braille spinners, background tasks, and blocked dialogs.
+regex = ['(?m)^[ \t]*─{20,}[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*>[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*─{20,}[ \t]*(?:\r?\n[ \t]*)*\z']
+not = [
+  { regex = ['[\u2800-\u28FF]'] },
+  { regex = ['(?i)·\s*[1-9][0-9]*\s+task'] },
+  { contains = ["requesting permission for:"] },
+  { contains = ["run this command?"] },
+  { contains = ["do you want to proceed?"] },
+  { contains = ["tab amend"] },
+  { contains = ["do you trust the contents of this project?"] },
+  { contains = ["yes, i trust this folder"] },
+]

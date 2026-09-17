@@ -1431,3 +1431,184 @@ fn antigravity_permission_prompt_still_wins_after_trust_rule_added() {
         Some("permission_prompt")
     );
 }
+
+#[test]
+fn antigravity_prompt_box_is_idle_when_ready_for_input() {
+    // Real post-turn capture from agy 1.2.1 (from earshot `AGY_AFTER_TURN`,
+    // Quest Log #20). When sitting at an empty prompt framed by two horizontal
+    // rules, the pane is at rest and ready for input.
+    let screen = concat!(
+        "  39. Thirty-nine is the sum of five consecutive prime numbers (3 + 5 + 7 + 11 + 13).\n",
+        "  40. Forty marks the traditional number of days in a biblical flood, Lent, and quarantine periods.\n",
+        "\n",
+        "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n",
+        ">\n",
+        "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_eq!(result.state, AgentState::Idle);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("live_prompt_box")
+    );
+    assert!(result.visible_idle);
+    assert!(!result.visible_working);
+    assert!(!result.visible_blocker);
+}
+
+#[test]
+fn antigravity_prompt_box_matches_welcome_splash_screen() {
+    // Real first-launch capture from agy 1.2.1 (from earshot `AGY_SPLASH`).
+    // The welcome banner appears above the prompt box before the first turn.
+    let screen = concat!(
+        "      ▄▀▀▄        Antigravity CLI 1.2.1\n",
+        "     ▀▀▀▀▀▀       skylleddev@gmail.com (Google AI Pro)\n",
+        "    ▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (High)\n",
+        "   ▄▀▀    ▀▀▄     ~/Repos/earshot\n",
+        "\n",
+        "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n",
+        ">\n",
+        "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_eq!(result.state, AgentState::Idle);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("live_prompt_box")
+    );
+    assert!(result.visible_idle);
+    assert!(!result.visible_working);
+    assert!(!result.visible_blocker);
+}
+
+#[test]
+fn antigravity_prompt_box_does_not_match_mid_turn_screen() {
+    // Real mid-turn capture from agy 1.2.1 (from earshot `AGY_WORKING`).
+    // agy continues drawing the prompt box at the foot of the screen while
+    // an active turn is generating output. The prompt box rule must not fire;
+    // spinner_working must win with working.
+    let screen = concat!(
+        "────────────────────────────────────────────────────────────\n",
+        "> Count slowly from 1 to 40, one number per line, with a short sentence about each.\n",
+        "⣻  Generating...\n",
+        "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n",
+        ">\n",
+        "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_eq!(result.state, AgentState::Working);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("spinner_working")
+    );
+    assert!(result.visible_working);
+    assert!(!result.visible_idle);
+    assert!(result
+        .evaluated_rules
+        .iter()
+        .all(|r| r.id != "live_prompt_box" || !r.matched));
+}
+
+#[test]
+fn antigravity_prompt_box_does_not_match_permission_dialog() {
+    // Captured verbatim from agy 1.2.5 on an unanswered permission dialog.
+    // The prompt rule must not claim this pane or match in evaluated rules;
+    // permission_prompt must win with blocked.
+    let screen = concat!(
+        "● Bash(echo probe-ask-test) (ctrl+o to expand)\n",
+        "\n",
+        "Command\n",
+        "───────────────────────────────────────────────\n",
+        "\n",
+        "Reason: herdr probe: confirm\n",
+        "Requesting permission for:\n",
+        "   echo probe-ask-test\n",
+        "\n",
+        "Run this command?\n",
+        "> 1. Yes, run command\n",
+        "  2. Yes, and always allow in this conversation for commands that start with 'echo'\n",
+        "  3. Yes, and always allow for commands that start with 'echo' (Persist to settings.json)\n",
+        "  4. No, cancel\n",
+        "\n",
+        "  ↑/↓ Navigate · tab Amend · ctrl+g edit/expand command\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_eq!(result.state, AgentState::Blocked);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("permission_prompt")
+    );
+    assert!(result.visible_blocker);
+    assert!(!result.visible_idle);
+    assert!(result
+        .evaluated_rules
+        .iter()
+        .all(|r| r.id != "live_prompt_box" || !r.matched));
+}
+
+#[test]
+fn antigravity_prompt_box_does_not_match_folder_trust_dialog() {
+    // Captured verbatim from agy 1.2.5 on first launch in an untrusted workspace.
+    // The prompt rule must not claim this pane or match in evaluated rules;
+    // folder_trust_dialog must win with blocked.
+    let screen = concat!(
+        "Accessing workspace:\n",
+        "\n",
+        "/private/tmp/agyprobe\n",
+        "\n",
+        "Do you trust the contents of this project?\n",
+        "\n",
+        "Antigravity CLI requires permission to read, edit, and execute files here.\n",
+        "\n",
+        "> Yes, I trust this folder\n",
+        "  No, exit\n",
+        "\n",
+        "  \u{2191}/\u{2193} Navigate \u{b7} enter Confirm\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_eq!(result.state, AgentState::Blocked);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("folder_trust_dialog")
+    );
+    assert!(result.visible_blocker);
+    assert!(!result.visible_idle);
+    assert!(result
+        .evaluated_rules
+        .iter()
+        .all(|r| r.id != "live_prompt_box" || !r.matched));
+}
+
+#[test]
+fn antigravity_prompt_box_does_not_match_partially_typed_input() {
+    // If the human or automation has already typed partial text after the prompt
+    // marker, the prompt is not at rest. Appending into it would concatenate
+    // text, so the rule must not match and detection falls back to unconfirmed idle.
+    let screen = concat!(
+        "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n",
+        "> half a thought\n",
+        "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_ne!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("live_prompt_box")
+    );
+    assert!(!result.visible_idle);
+    assert!(result
+        .evaluated_rules
+        .iter()
+        .all(|r| r.id != "live_prompt_box" || !r.matched));
+}
