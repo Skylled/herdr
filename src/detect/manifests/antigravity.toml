@@ -1,7 +1,7 @@
 id = "agy"
-version = "2026.06.24.1"
+version = "2026.09.17.1"
 min_engine_version = 1
-updated_at = "2026-06-24T00:00:00Z"
+updated_at = "2026-09-17T00:00:00Z"
 aliases = ["antigravity", "antigravity-cli"]
 
 [[rules]]
@@ -13,7 +13,10 @@ visible_blocker = true
 contains = ["requesting permission for:"]
 any = [
   { contains = ["do you want to proceed?"] },
-  { contains = ["tab amend", "edit command"] },
+  # agy renders this footer hint as "ctrl+g edit command" (<=1.2.4) and
+  # "ctrl+g edit/expand command" (1.2.5). Match edit..command on one line with a
+  # short gap so a further wording change does not silently drop the branch.
+  { contains = ["tab amend"], regex = ['(?i)\bedit\b[^\n]{0,32}\bcommand\b'] },
 ]
 
 [[rules]]
