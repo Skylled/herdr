@@ -175,7 +175,7 @@ branch dropped out and took the rule with it. The pane reported `idle`, and
 question. Replaced with `tab amend` plus a bounded same-line regex
 `(?i)\bedit\b[^\n]{0,32}\bcommand\b`, a superset of the string it replaced.
 
-**The startup trust dialog (not installed).** agy's first-launch modal — *"Do you
+**The startup trust dialog.** agy's first-launch modal — *"Do you
 trust the contents of this project?"* — had no rule at all, so detection fell
 through to `default_known_agent_idle_fallback` and the pane reported `idle` while
 holding a modal that cannot proceed without a keypress. Same shape of fix and the
@@ -190,9 +190,10 @@ The manifest `version` is bumped on each change, which is load-bearing:
 is strictly older (`manifest.rs:770-784`).
 
 - **Merged:** yes, both on `master`.
-- **Installed:** the matcher only, 2026-09-17, in `0.9.0+fork.2`. **The trust-dialog
-  rule is committed but NOT installed** — it needs a build, an install and a
-  restart, and until then a trust dialog still reports `idle` on this machine.
+- **Installed:** the matcher 2026-09-17 in `0.9.0+fork.2`; the trust-dialog rule
+  2026-09-17 in `0.9.0+fork.3`. **`fork.3` is installed but not yet live** — the
+  running server still serves the `fork.2` image, so a trust dialog still reports
+  `idle` on this machine until Kyle runs `groundctl stop herdr` / `start herdr`.
 - **Upstream:** worth reporting as a bug. Manifests are data, the wording drift is
   upstream's to track, and neither fix is fork-specific. Bug-report path only; see
   the policy note above.
@@ -225,18 +226,21 @@ untested part. The branch is kept as the record of that investigation.
 
 ## Installed
 
-Currently installed: **`0.9.0+fork.2`** — patches 1, 2, 3 and the matcher half of
-patch 5 — built from `85c3edac`, installed 2026-09-17.
+Currently installed: **`0.9.0+fork.3`** — patches 1, 2, 3 and **both** halves of
+patch 5 — built from `8664b312`, installed 2026-09-17.
 
-The trust-dialog half of patch 5 is on `master` but **not in this binary.**
+**Installed, not yet live.** The server was still running the `fork.2` image when
+this was written; a stop/start is Kyle's, and until it happens `herdr --version`
+from a *running* server reports `fork.2` while the binary on disk reports `fork.3`.
+That divergence is expected between install and restart, not a failed install.
 
 Verify with **exactly** one of these two commands — the digest you get depends on
 which, and they are not comparable:
 
 ```sh
-herdr --version                    # 0.9.0+fork.2   <- since fork.1, this is enough
-shasum -a 256 ~/.local/bin/herdr   # 875e733ee9b43e95469a9d0767ca4528be9e9c04ddf4ec90d9d4e38e0545a52f
-shasum -a 1   ~/.local/bin/herdr   # 7b37f7ba9d02370aff11e9845b679620e8c11dbd
+herdr --version                    # 0.9.0+fork.3   <- since fork.1, this is enough
+shasum -a 256 ~/.local/bin/herdr   # 36b809a0e5ba382572119b7842e6f0d48d9fbd618d7fff62ccac49388e90485f
+shasum -a 1   ~/.local/bin/herdr   # 0b3e1c42dc3a85b9f11d838a8f6cfbb53418212a
 ```
 
 > **`shasum` with no `-a` is SHA-1, not SHA-256.** Both digests above are correct
@@ -248,15 +252,25 @@ shasum -a 1   ~/.local/bin/herdr   # 7b37f7ba9d02370aff11e9845b679620e8c11dbd
 Digests are written in full throughout. A truncated hash is not comparable and
 invites the same mistake this section is about.
 
-**`~/.local/bin/herdr`** — `0.9.0+fork.2`, patches 1-3 and the matcher half of
-patch 5, built from `85c3edac`, installed 2026-09-17:
+**`~/.local/bin/herdr`** — `0.9.0+fork.3`, patches 1-3 and both halves of patch 5,
+built from `8664b312`, installed 2026-09-17:
+
+- SHA-256 `36b809a0e5ba382572119b7842e6f0d48d9fbd618d7fff62ccac49388e90485f`
+- SHA-1 &nbsp;&nbsp;`0b3e1c42dc3a85b9f11d838a8f6cfbb53418212a`
+
+**`~/.local/bin/herdr.bak`** — `0.9.0+fork.2`, patches 1-3 and the matcher half of
+patch 5, built from `85c3edac`, the image that ran 2026-09-17 21:38 until the next
+restart. This is the rollback target, and it is the unsuffixed `.bak`, so the next
+install will overwrite it. Digest re-verified from disk immediately before the
+`fork.3` swap, so this is the file, not a copied number:
 
 - SHA-256 `875e733ee9b43e95469a9d0767ca4528be9e9c04ddf4ec90d9d4e38e0545a52f`
 - SHA-1 &nbsp;&nbsp;`7b37f7ba9d02370aff11e9845b679620e8c11dbd`
 
-**`~/.local/bin/herdr.bak`** — `0.9.0+fork.1`, patches 1-3, built from `1ad17cb6`,
-the image that ran 2026-09-15 to 2026-09-17. This is the rollback target, and it
-is the unsuffixed `.bak`, so the next install will overwrite it:
+**`0.9.0+fork.1`** — patches 1-3, built from `1ad17cb6`, the image that ran
+2026-09-15 to 2026-09-17. **No longer on disk**: it occupied the unsuffixed `.bak`
+and the `fork.3` install overwrote it, as this section says it would. Recorded so
+the digest survives the file:
 
 - SHA-256 `6cb85acdaa3c28b2d6ff187a22dd5374500f45edc84fa83eba64cc00270110e6`
 - SHA-1 &nbsp;&nbsp;`fccfb29ae4e088712a9718b23c0d0eea9ccb7906`
@@ -265,6 +279,12 @@ Reproducible (of `fork.1`): a full `cargo clean -p herdr` and rebuild produced a
 byte-identical binary, which is how that artefact was reconciled against the instrumented and
 candidate builds that had been sitting in `target/release/` during the #55
 investigation.
+
+**One-deep rollback.** Only `herdr.bak` is a fork-labelled rollback target, and each
+install consumes it. If you need to keep the outgoing image, copy it to a *suffixed*
+name before swapping — the `Installing` recipe below uses a dated suffix for exactly
+that reason, and the unsuffixed `.bak` used here is the shorter-lived convention the
+last three installs have actually followed.
 
 **`~/.local/bin/herdr.bak-0.9.0-fork0-20260915b`** — 0.9.0 + patches 1 and 2, the
 unlabelled build that ran 2026-09-15 19:36 to 21:05:
