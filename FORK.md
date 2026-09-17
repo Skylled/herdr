@@ -63,7 +63,7 @@ next person will otherwise wonder.
 
 ## Patches
 
-Patches 1-3 are on `master`; patch 4 is superseded and unmerged. `master` is not
+Patches 1-3, 5, and 6 are on `master`; patch 4 is superseded and unmerged. `master` is not
 pushed under its own name: `origin/master` is 84 commits ahead, so the fork's line
 of development is published as the `fork/master` branch instead. See
 [Base decision](#base-decision).
@@ -204,6 +204,41 @@ is strictly older (`manifest.rs:770-784`).
   (`answerability: "blocked"`, `answerable: false`). Each rule's test fails with its
   rule reverted and passes with it.
 
+### 6. Antigravity prompt box falls through to unknown idle — Quest Log #104
+
+`454adb1d` · `src/detect/manifests/antigravity.toml`
+
+Manifest-only, same shape as patch 5: a detection rule, no engine change. A
+screen sitting at agy's empty prompt box (`>` framed by two horizontal rules)
+had no idle rule at all, so it fell through to
+`default_known_agent_idle_fallback` — `visible_idle: false`,
+`matched_rule: null`. Automation layers (such as Earshot) driving these panes
+refuse to type into an unconfirmed fallback idle state, so the pane was
+stuck, not merely mislabeled.
+
+Added `live_prompt_box`: priority 50 (below the working and blocked rules),
+region `bottom_non_empty_lines(10)`, an anchored regex (`\z`) requiring the
+empty prompt framed by both rules at the foot of the region so text typed
+below the box or prose mentioning rules cannot match, and not-gates vetoing
+active braille spinners, background-task lines, permission dialogs, and the
+folder trust dialog — so a mid-turn screen that keeps drawing the prompt box
+frame is never classified idle. Manifest bumped to `2026.09.17.3`.
+
+Six targeted tests, four of them negative (mid-turn, permission prompt, trust
+dialog, partial input). Revert-and-fail proof run: reverting the rule turns
+the positive tests back into the old fallback verdict
+(`matched_rule: None`, `visible_idle: false`).
+
+- **Merged:** yes, on `master`.
+- **Installed:** 2026-09-17, in `0.9.0+fork.4`. **Installed but not yet
+  live** — the running server still serves the `fork.3` image until Kyle
+  restarts it. See [Installed](#installed).
+- **Upstream:** worth reporting, same reasoning as patch 5 — manifest data,
+  not fork-specific. Bug-report path only.
+- **Verified by the revert-and-fail proof above, not live yet.** No pane has
+  exercised this against a real agy prompt box through a running `fork.4`
+  server; that is the remaining verification once fork.4 goes live.
+
 ### 4. Completion suppressed when no client attached — superseded
 
 Branch `fix/done-suppressed-when-no-client-attached` (`6a46ebed`) · **not merged,
@@ -226,21 +261,22 @@ untested part. The branch is kept as the record of that investigation.
 
 ## Installed
 
-Currently installed: **`0.9.0+fork.3`** — patches 1, 2, 3 and **both** halves of
-patch 5 — built from `8664b312`, installed 2026-09-17.
+Currently installed: **`0.9.0+fork.4`** — patches 1, 2, 3 and both halves of
+patch 5, plus patch 6 — built from `6b6d29b2`, installed 2026-09-17.
 
-**Installed, not yet live.** The server was still running the `fork.2` image when
-this was written; a stop/start is Kyle's, and until it happens `herdr --version`
-from a *running* server reports `fork.2` while the binary on disk reports `fork.3`.
-That divergence is expected between install and restart, not a failed install.
+**Installed, not yet live.** The server is still running the `fork.3` image;
+a stop/start is Kyle's, and until it happens `herdr --version` from a
+*running* server reports `fork.3` while the binary on disk reports `fork.4`.
+That divergence is expected between install and restart, not a failed
+install.
 
 Verify with **exactly** one of these two commands — the digest you get depends on
 which, and they are not comparable:
 
 ```sh
-herdr --version                    # 0.9.0+fork.3   <- since fork.1, this is enough
-shasum -a 256 ~/.local/bin/herdr   # 36b809a0e5ba382572119b7842e6f0d48d9fbd618d7fff62ccac49388e90485f
-shasum -a 1   ~/.local/bin/herdr   # 0b3e1c42dc3a85b9f11d838a8f6cfbb53418212a
+herdr --version                    # 0.9.0+fork.4   <- since fork.1, this is enough
+shasum -a 256 ~/.local/bin/herdr   # 5907fb4c6d2092956f38012215f0068be45052c880ff95de7e9cc78104cefdc5
+shasum -a 1   ~/.local/bin/herdr   # 841d7cb83cc00f237ba98d04697422e4c86fddd7
 ```
 
 > **`shasum` with no `-a` is SHA-1, not SHA-256.** Both digests above are correct
@@ -252,17 +288,27 @@ shasum -a 1   ~/.local/bin/herdr   # 0b3e1c42dc3a85b9f11d838a8f6cfbb53418212a
 Digests are written in full throughout. A truncated hash is not comparable and
 invites the same mistake this section is about.
 
-**`~/.local/bin/herdr`** — `0.9.0+fork.3`, patches 1-3 and both halves of patch 5,
-built from `8664b312`, installed 2026-09-17:
+**`~/.local/bin/herdr`** — `0.9.0+fork.4`, patches 1-3, both halves of patch 5,
+and patch 6, built from `6b6d29b2`, installed 2026-09-17:
+
+- SHA-256 `5907fb4c6d2092956f38012215f0068be45052c880ff95de7e9cc78104cefdc5`
+- SHA-1 &nbsp;&nbsp;`841d7cb83cc00f237ba98d04697422e4c86fddd7`
+
+**`~/.local/bin/herdr.bak`** — `0.9.0+fork.3`, patches 1-3 and both halves of
+patch 5, built from `8664b312`, the image that ran from 2026-09-17 until the
+next restart. This is the rollback target, and it is the unsuffixed `.bak`,
+so the next install will overwrite it. Digest re-verified from disk
+immediately before the `fork.4` swap, so this is the file, not a copied
+number:
 
 - SHA-256 `36b809a0e5ba382572119b7842e6f0d48d9fbd618d7fff62ccac49388e90485f`
 - SHA-1 &nbsp;&nbsp;`0b3e1c42dc3a85b9f11d838a8f6cfbb53418212a`
 
-**`~/.local/bin/herdr.bak`** — `0.9.0+fork.2`, patches 1-3 and the matcher half of
-patch 5, built from `85c3edac`, the image that ran 2026-09-17 21:38 until the next
-restart. This is the rollback target, and it is the unsuffixed `.bak`, so the next
-install will overwrite it. Digest re-verified from disk immediately before the
-`fork.3` swap, so this is the file, not a copied number:
+**`0.9.0+fork.2`** — patches 1-3 and the matcher half of patch 5, built from
+`85c3edac`, the image that ran 2026-09-17 21:38 until the `fork.3` restart.
+**No longer on disk**: it occupied the unsuffixed `.bak` and the `fork.4`
+install overwrote it, as this section says it would. Recorded so the digest
+survives the file:
 
 - SHA-256 `875e733ee9b43e95469a9d0767ca4528be9e9c04ddf4ec90d9d4e38e0545a52f`
 - SHA-1 &nbsp;&nbsp;`7b37f7ba9d02370aff11e9845b679620e8c11dbd`
