@@ -1264,3 +1264,89 @@ fn codex_osc_working_beats_weak_blocker_screen() {
         Some("osc_title_working")
     );
 }
+
+#[test]
+fn antigravity_permission_prompt_matches_1_2_5_edit_expand_wording() {
+    // Captured verbatim from agy 1.2.5 sitting on an unanswered permission
+    // dialog (#104, finding 9). 1.2.4 rendered the footer hint as "ctrl+g edit
+    // command"; 1.2.5 renders "ctrl+g edit/expand command", which the old
+    // literal `edit command` needle missed. Because `contains` is an AND, the
+    // whole rule dropped out and the pane reported idle/done while waiting on
+    // a human.
+    let screen = concat!(
+        "● Bash(echo probe-ask-test) (ctrl+o to expand)\n",
+        "\n",
+        "Command\n",
+        "───────────────────────────────────────────────\n",
+        "\n",
+        "Reason: herdr probe: confirm\n",
+        "Requesting permission for:\n",
+        "   echo probe-ask-test\n",
+        "\n",
+        "Run this command?\n",
+        "> 1. Yes, run command\n",
+        "  2. Yes, and always allow in this conversation for commands that start with 'echo'\n",
+        "  3. Yes, and always allow for commands that start with 'echo' (Persist to settings.json)\n",
+        "  4. No, cancel\n",
+        "\n",
+        "  ↑/↓ Navigate · tab Amend · ctrl+g edit/expand command\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_eq!(result.state, AgentState::Blocked);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("permission_prompt")
+    );
+    assert!(result.visible_blocker);
+    assert!(!result.visible_idle);
+}
+
+#[test]
+fn antigravity_permission_prompt_still_matches_1_2_4_edit_command_wording() {
+    // The pre-1.2.5 wording must keep matching: the relaxed branch is a
+    // superset of the literal it replaced, not a swap.
+    let screen = concat!(
+        "Requesting permission for:\n",
+        "   echo probe-ask-test\n",
+        "\n",
+        "Run this command?\n",
+        "> 1. Yes, run command\n",
+        "  2. No, cancel\n",
+        "\n",
+        "  ↑/↓ Navigate · tab Amend · ctrl+g edit command\n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_eq!(result.state, AgentState::Blocked);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("permission_prompt")
+    );
+    assert!(result.visible_blocker);
+}
+
+#[test]
+fn antigravity_permission_prompt_does_not_match_ordinary_output() {
+    // The relaxed edit..command regex must not fire on prose that happens to
+    // contain both words. Ordinary transcript output carries neither the
+    // "requesting permission for:" gate nor the footer controls.
+    let screen = concat!(
+        "● Bash(git commit) (ctrl+o to expand)\n",
+        "\n",
+        "  I will edit the file and then run the command below.\n",
+        "  Use the edit command to change it, or amend with tab later.\n",
+        "\n",
+        "> \n",
+    );
+
+    let result = explain(Agent::Antigravity, screen);
+
+    assert_ne!(result.state, AgentState::Blocked);
+    assert_ne!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("permission_prompt")
+    );
+}
