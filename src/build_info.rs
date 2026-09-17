@@ -14,7 +14,7 @@ pub const BASE_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// would panic the update checker at runtime. Keeping it here means
 /// `BASE_VERSION` stays a clean `0.9.0` for every comparison, and only the
 /// human- and API-facing string carries the label.
-pub const FORK_BUILD: u32 = 3;
+pub const FORK_BUILD: u32 = 4;
 
 pub fn channel() -> &'static str {
     non_empty(option_env!("HERDR_BUILD_CHANNEL")).unwrap_or("stable")
