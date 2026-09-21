@@ -158,6 +158,161 @@ line_regex = ["^exact line$"]
 }
 
 #[test]
+fn blocked_rule_requires_outer_gate_and_complete_regex_alternative() {
+    // Permission-style gates: test engine composition with synthetic controls,
+    // not the wording or layout of any bundled agent's dialog.
+    with_manifest_dirs("blocked-regex-alternative", || {
+        write_local_codex(&rules_manifest(
+            r#"
+[[rules]]
+id = "confirmation"
+state = "blocked"
+visible_blocker = true
+contains = ["authorization-marker"]
+any = [
+  { contains = ["confirm-marker"] },
+  { contains = ["amend-marker"], regex = ['(?i)\brevise\b[^\n]{0,4}\boperation\b'] },
+]
+"#,
+        ));
+
+        for (screen, blocked) in [
+            ("authorization-marker confirm-marker", true),
+            ("authorization-marker amend-marker revise operation", true),
+            ("authorization-marker amend-marker REVISE/OPERATION", true),
+            (
+                "authorization-marker amend-marker revise----operation",
+                true,
+            ),
+            (
+                "authorization-marker amend-marker revise-----operation",
+                false,
+            ),
+            ("authorization-marker amend-marker revise\noperation", false),
+            ("authorization-marker amend-marker revised operation", false),
+            ("authorization-marker amend-marker revise operations", false),
+            ("authorization-marker revise operation", false),
+            ("authorization-marker amend-marker", false),
+            ("confirm-marker amend-marker revise operation", false),
+            ("ordinary output", false),
+        ] {
+            let result = explain(Agent::Codex, screen);
+            assert_eq!(
+                result.state,
+                if blocked {
+                    AgentState::Blocked
+                } else {
+                    AgentState::Idle
+                },
+                "{screen:?}"
+            );
+            assert_eq!(result.visible_blocker, blocked, "{screen:?}");
+            assert!(
+                !result.visible_idle,
+                "fallback idle is not visible idle: {screen:?}"
+            );
+            assert_eq!(result.matched_rule.is_some(), blocked, "{screen:?}");
+        }
+    });
+}
+
+#[test]
+fn blocked_rule_requires_choice_in_region_and_preserves_other_rules() {
+    // Trust-style gates: a question needs an option in the same bounded region.
+    // A higher-priority rule that fails its gates must not hide another blocker.
+    with_manifest_dirs("blocked-choice-region", || {
+        write_local_codex(&rules_manifest(
+            r#"
+[[rules]]
+id = "question"
+state = "blocked"
+priority = 30
+region = "bottom_non_empty_lines(3)"
+visible_blocker = true
+contains = ["question-marker"]
+any = [
+  { contains = ["accept-marker"] },
+  { contains = ["decline-marker"] },
+]
+
+[[rules]]
+id = "other_blocker"
+state = "blocked"
+priority = 20
+visible_blocker = true
+contains = ["approval-marker"]
+
+[[rules]]
+id = "activity"
+state = "working"
+priority = 10
+visible_working = true
+contains = ["activity-marker"]
+"#,
+        ));
+
+        for (screen, state, rule) in [
+            (
+                "question-marker\n\naccept-marker\n",
+                AgentState::Blocked,
+                Some("question"),
+            ),
+            (
+                "question-marker\ndecline-marker",
+                AgentState::Blocked,
+                Some("question"),
+            ),
+            ("question-marker", AgentState::Idle, None),
+            ("accept-marker", AgentState::Idle, None),
+            (
+                "question-marker\none\ntwo\naccept-marker",
+                AgentState::Idle,
+                None,
+            ),
+            (
+                "accept-marker\none\ntwo\nquestion-marker",
+                AgentState::Idle,
+                None,
+            ),
+            (
+                "activity-marker\nquestion-marker",
+                AgentState::Working,
+                Some("activity"),
+            ),
+            (
+                "activity-marker\nquestion-marker\naccept-marker",
+                AgentState::Blocked,
+                Some("question"),
+            ),
+            (
+                "question-marker\napproval-marker",
+                AgentState::Blocked,
+                Some("other_blocker"),
+            ),
+        ] {
+            let result = explain(Agent::Codex, screen);
+            assert_eq!(result.state, state, "{screen:?}");
+            assert_eq!(
+                result.matched_rule.as_ref().map(|r| r.id.as_str()),
+                rule,
+                "{screen:?}"
+            );
+            assert_eq!(
+                result.visible_blocker,
+                state == AgentState::Blocked,
+                "{screen:?}"
+            );
+            assert_eq!(
+                result.visible_working,
+                state == AgentState::Working,
+                "{screen:?}"
+            );
+            assert!(!result.visible_idle, "{screen:?}");
+        }
+    });
+}
+
+#[test]
 fn remote_manifest_loads_between_local_override_and_bundled() {
     with_manifest_dirs("remote-source", || {
         write_remote_codex(&remote_manifest("9999.01.01.1", "blocked", "remote-ready"));
