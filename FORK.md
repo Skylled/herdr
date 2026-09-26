@@ -7,34 +7,92 @@ patches rather than trying to land them upstream.
 
 Upstream does not accept unsolicited pull requests (`CONTRIBUTING.md`); our GitHub
 account is not in `.github/APPROVED_CONTRIBUTORS`. That is settled and is not a
-thing to retry per patch.
+thing to retry per patch. "Should go upstream" below means *file a bug report*,
+never *open a PR*.
 
 **Closes Quest Log #86.** Keep this file current in the same commit as any patch
 change — that is the whole point of it.
+
+Last audited **2026-09-26**, against `codex/rebase-upstream-2026-09-21` at
+`9136cc19`, on the VM (`Kyles-Virtual-Machine`).
+
+## At a glance
+
+| # | Patch | Quest Log | On build branch | Installed on VM | Should go upstream |
+|---|---|---|---|---|---|
+| 1 | Alt-screen read truncation | #14 | yes, `618ef5c3` | yes | bug report, maybe |
+| 2 | Completion latched regardless of focus | #55 | yes, `489e17b2` | yes | no |
+| 3 | Focused client no longer erases a completion | #55 | yes, `1673030a` | yes | no |
+| 4 | Completion when no client attached | #55 | **no** (superseded) | no | no |
+| 5 | agy permission prompt + trust dialog | #104 | yes, `bbee2342`, `a84932a7` | yes, live | bug report |
+| 6 | agy prompt box idle rule | #104 | yes, `90095251` | yes, live | bug report |
+| 7 | `+fork.N` version label | #86 | yes, `c345b7c0` + bumps | yes | no |
+| 8 | Synthetic blocker-gate engine tests | #104 | yes, `9136cc19` | yes (tests only) | no |
+
+Eight entries: six behavioural fixes (1, 2, 3, 5, 6, and the superseded 4), one
+fork-identity feature (7), one test-only commit (8). **Seven are on the build
+branch; patch 4 is not.**
 
 ## Why a file date is not evidence
 
 On 2026-09-15 a patch was reported as not running because the installed binary's
 date predated the commit. It was running: it had been installed three days before
-it was committed. A date tells you when a binary was built, not what is in it.
+it was committed. The same day, a patched binary was called "stock" on the
+strength of its file date. A date tells you when a binary was built, not what is
+in it.
 
 **Record checksums. `shasum -a 256 ~/.local/bin/herdr` is the only honest answer
-to "what is running".**
+to "what is running".** And since the rebase, `herdr --version` is not enough
+either — see [Version label](#version-label).
 
 ## Base
 
 | | |
 |---|---|
-| Our base | `58271459` — `feat: support conditional sidebar token hiding (#3925)` |
-| Upstream version | 0.9.0 (released 2026-09-07) |
-| `origin/master` | `32503f81` (#4148) — **84 commits ahead of our base** |
+| Build branch | `codex/rebase-upstream-2026-09-21` (on `origin`), tip `9136cc19` |
+| Our base | `5a649142` — `chore: approve ain3sh contributor accounts`, upstream `master` of 2026-09-21 |
+| Upstream version at base | `0.9.1` in `Cargo.toml` (`956f23ff release: synchronize metadata for v0.9.1`) |
+| Upstream since base | `upstream/master` is 31 commits ahead (`d11c0c34`, #4566, fetched 2026-09-26) |
+| Previous base | `58271459` (#3925), upstream 0.9.0 — everything up to `fork.4` on the M6 host |
+| `origin/master` | `32503f81` (#4148) — **stale mirror, now 58 commits *behind* our base** |
 
-`origin/master` on our own fork is a current mirror of upstream and has moved on;
-our patches sit on the older `58271459`. Staying there is a deliberate decision —
-see [Base decision](#base-decision).
+Upstream's `v0.9.1` tag (`065ef9d6`) is not an ancestor of our base: upstream cuts
+stable tags off-branch and merges the release metadata back. Our base is upstream
+`master` *after* that merge-back, so it is 0.9.1 plus 37 later master commits
+(including `fix: preserve session layouts across shutdown and restore failures
+(#4400)` and the navigator perf work). Describe it as "upstream master
+2026-09-21", not "0.9.1".
 
-Note `upstream/master` as a remote-tracking ref in a local clone goes stale. Run
+`upstream/master` as a remote-tracking ref in a local clone goes stale. Run
 `git fetch upstream` before believing it.
+
+### The 2026-09-21 rebase
+
+The fork was rebased from `58271459` onto `5a649142` on 2026-09-21 (branch named
+`codex/…`, so presumably a Codex session). No written decision record exists in
+the repo; the 2026-09-15 "stay put" decision in [Base decision](#base-decision)
+was superseded in practice by this rebase. Pre-rebase state is preserved on
+`origin` as `backup/pre-rebase-2026-09-21` (`8d0446a3`), identical to
+`m1-local-master`.
+
+What the rebase changed, found by `git cherry` / `git range-diff` against the
+backup:
+
+- **Clean replays:** patches 1, 2, 3, 7, and patch 5's permission-prompt half
+  and patch 6 (new SHAs, same diff content).
+- **`c149faad` (remove `AGENTS.md` and `.agents/skills`) was dropped.** Both are
+  back in the tree. The fork no longer carries that cleanup; upstream's
+  `AGENTS.md` is present again.
+- **The agy manifest tests were dropped.** Patch 5's trust-dialog test, the
+  permission-prompt tests, and patch 6's six targeted tests no longer exist in
+  `src/`. That matches upstream's current rule in `CLAUDE.md` ("do not add
+  tests that classify captured or invented CLI screens against bundled agent
+  rules"). Patch 8 replaced them with synthetic engine tests. Consequence: the
+  "revert-and-fail" proofs described under patches 5 and 6 were true for the
+  old base and **cannot be rerun on the build branch**; the rules are now
+  guarded only by live smoke tests.
+- **`FORK.md` itself** was replayed as-is, so until this audit it still
+  described the old base.
 
 ## Check upstream before writing a patch
 
@@ -42,35 +100,41 @@ Note `upstream/master` as a remote-tracking ref in a local clone goes stale. Run
 like idle states, we can know to check upstream for fixes before we roll our
 own."*
 
-We are 84 commits behind upstream by choice, so any bug we hit may already be
-fixed in commits we have not taken. That makes "search upstream" the **first**
-step of a Herdr debugging session, not a postscript after the patch is written.
-It applies most to agent state detection — idle, done, blocked, focus, hook
-authority — which is where our patches already cluster and where upstream is most
-active.
+Any bug we hit may already be fixed in commits we have not taken. That makes
+"search upstream" the **first** step of a Herdr debugging session, not a
+postscript after the patch is written. It applies most to agent state
+detection — idle, done, blocked, focus, hook authority — which is where our
+patches cluster and where upstream is most active.
 
 ```sh
 git fetch upstream
-git log --oneline 58271459..upstream/master -- src/app src/detect src/terminal
-git log --oneline 58271459..upstream/master --grep=idle --grep=agent --grep=detect -i
+git log --oneline 5a649142..upstream/master -- src/app src/detect src/terminal src/server
+git log --oneline 5a649142..upstream/master --grep=idle --grep=agent --grep=detect -i
 ```
 
+Two upstream commits since our base touch exactly the files our patches live in,
+and must be read before the next rebase:
+
+- `28360107` `fix: distinguish agent completion from startup and session changes
+  (#4457)` — 364 lines in `src/app/actions.rs`, 49 in `src/server/headless.rs`.
+  That is patches 2 and 3's territory. It may fix, overlap, or conflict with #55.
+- `9c96f7dd` `fix: avoid inferring codex idle from terminal output (#4563)` — the
+  engine change the VM's codex override (below) is waiting for.
+
 Finding a fix upstream does not mean adopting the base. Cherry-picking one commit
-is usually cheaper than taking all 84, and either way it beats writing a second
-fix for a solved problem. Record what you searched in the issue, including a
-negative result — "checked upstream, nothing" is worth writing down, because the
-next person will otherwise wonder.
+is usually cheaper than a full rebase. Record what you searched in the issue,
+including a negative result.
 
 ## Patches
 
-Patches 1-3, 5, and 6 are on `master`; patch 4 is superseded and unmerged. `master` is not
-pushed under its own name: `origin/master` is 84 commits ahead, so the fork's line
-of development is published as the `fork/master` branch instead. See
-[Base decision](#base-decision).
+SHAs are on the build branch. The pre-rebase SHA (on `backup/pre-rebase-2026-09-21`
+and `fork/master`) follows in brackets, because older notes and Quest Log comments
+cite those.
 
 ### 1. Alternate-screen read truncation — Quest Log #14
 
-`c149faad`, `05d2b867` · `src/server/alt_screen_read.rs`
+`618ef5c3` [was `05d2b867`] · `src/server/alt_screen_read.rs` · branch
+`fix/alt-screen-read-truncated-fallback` (`88dc2ea7`, same patch-id, old base)
 
 A `pane read` / `agent read` that asked for more history than fits on screen could
 silently return *less* than a smaller request would, labelled complete. The
@@ -84,20 +148,18 @@ discarding the whole read; and `next_harvest_events` shrinks the wheel batch onc
 a batch scrolls close to a full page, preserving enough overlap for
 `merge_scrolled_up` to align successive frames.
 
-- **Merged:** yes.
-- **Installed:** yes, since 2026-09-11. See [Installed](#installed).
-- **Upstream:** no. #14 was cancelled as an upstream *report*, not as a fix.
+- **On build branch:** yes.
+- **Upstream base it applies to:** `5a649142`. Upstream has not touched
+  `alt_screen_read.rs` since.
+- **Installed:** yes (VM, and M6 host since 2026-09-11 per the old record).
+- **Upstream:** a bug report would be legitimate — the `truncated` contract is
+  upstream's own. #14 was cancelled as an upstream *report*, not as a fix.
 - **Not verified live:** the adaptive batch size against a real Claude Code pane.
-  It has run since 2026-09-11 without complaint, which is not a test.
-
-`c149faad` (removing `AGENTS.md` and `.agents/skills`) is carried with it. It is a
-harness cleanup, not part of the fix, but it is what made the fix committable —
-`AGENTS.md` forbade AI co-author trailers, which had blocked the commit for four
-days.
 
 ### 2. Completion event suppressed by pane focus — Quest Log #55
 
-`29bab18e` · `src/app/actions.rs`
+`489e17b2` [was `29bab18e`] · `src/app/actions.rs` · branch
+`fix/emit-done-regardless-of-pane-focus` (`29bab18e`, merged)
 
 A turn that ended while its pane was the focused active tab reported `idle`
 instead of `done`, so no API event and no plugin hook ever learned the session had
@@ -107,305 +169,277 @@ minutes focused. Affected every harness.
 `pane.seen == false` is the only thing that turns `AgentState::Idle` into
 `AgentStatus::Done`, and it was being set from a predicate that guesses whether a
 human is looking at the pane. Completion is now latched unconditionally. Sound and
-toast suppression is untouched and still focus-driven — it is computed separately
-in `record_or_deliver_agent_notification`, so a human watching a pane still gets
-no beep and no toast.
+toast suppression is untouched and still focus-driven.
 
-**This patch alone did not fix #55.** It is necessary and was not sufficient; see
-patch 3. Installing it and declaring the bug fixed, on the strength of 443 passing
+**This patch alone did not fix #55.** It was necessary but not sufficient; see
+patch 3. Installing it and declaring the bug fixed, on the strength of passing
 tests and a code-reading argument, was wrong — a live test disproved it in about
-thirty seconds. The lesson is recorded on #55 and is the reason patch 3 was
-developed against a reproduction instead.
+thirty seconds.
 
-- **Merged:** yes.
-- **Installed:** yes, 2026-09-15, in `0.9.0+fork.1`.
-- **Upstream:** no, and it should not go. For a human-facing multiplexer, staying
-  quiet about a pane the human is watching is a defensible product choice. It is
-  wrong for us because our consumer is a program that is never watching.
+- **On build branch:** yes.
+- **Upstream base it applies to:** `5a649142`. **Next rebase will collide with
+  upstream `28360107` (#4457).**
+- **Installed:** yes.
+- **Upstream:** no. For a human-facing multiplexer, staying quiet about a pane
+  the human is watching is a defensible product choice. It is wrong for us
+  because our consumer is a program that is never watching.
 
 ### 3. Completion erased by a focused client — Quest Log #55
 
-`65a92729` · `src/server/headless.rs`
+`1673030a` [was `65a92729`] · `src/server/headless.rs` · branch
+`fix/completion-latch-erased-by-focused-client` (`65a92729`, merged)
 
-The other half of #55, and the half that actually made the symptom. Patch 2
-latches the completion correctly and `PaneAgentStatusChanged` really is emitted
-carrying `Done` — that much was confirmed by instrumenting a running server. But
-`sync_foreground_client_state` then called `mark_active_tab_seen()` on **every**
+The other half of #55, and the half that actually made the symptom.
+`sync_foreground_client_state` called `mark_active_tab_seen()` on **every**
 client-state sync while the outer terminal reported focus. That is an ambient
-condition, not a user action, and it sets `pane.seen = true` — the same bit that
-makes `AgentStatus::Done`. The completion was erased moments after being latched.
+condition, not a user action, and it sets `pane.seen = true` — erasing the
+completion moments after patch 2 latched it.
 
-This is why event-level tests passed while the bug was live: **a hook does not
-read status from the event payload.** The plugin context is built by `pane_info`
-from current pane state, as are `session.snapshot` and `session_list`. Every one
-of them re-derives, so every one of them read `idle`.
+Event-level tests passed while the bug was live because **a hook does not read
+status from the event payload.** The plugin context, `session.snapshot` and
+`session_list` all re-derive from current pane state, so all of them read `idle`.
 
-Acknowledgement now follows an actual user action. `handle_pane_focus` and
-`focus_agent_target` still call `mark_active_tab_seen`, so navigating to a pane
-still clears it; merely having a focused client attached no longer does.
+Acknowledgement now follows an actual user action (`handle_pane_focus`,
+`focus_agent_target`); merely having a focused client attached no longer does.
 
-- **Merged:** yes.
-- **Installed:** yes, 2026-09-15, in `0.9.0+fork.1`.
+- **On build branch:** yes, with its regression tests
+  (`focused_client_sync_does_not_erase_a_completion` and friends in
+  `src/server/headless/tests/mod.rs`).
+- **Upstream base it applies to:** `5a649142`. Same #4457 collision warning as
+  patch 2.
+- **Installed:** yes.
 - **Upstream:** no. Same reasoning as patch 2.
-- **Verified against a reproduction, not by reading.** An isolated named herdr
-  session driven with no human: pty-attached client, `ESC[I` injected as outer
-  focus, `working`/`idle` driven through `pane.report_agent`. Before: focused
-  yields `idle`, unfocused yields `done`, repeatably. After: `done` in all three
-  conditions. The regression test fails with the fix reverted and passes with it —
-  a negative control that patch 2's tests never had.
-- **Known consequence:** a human sitting on a focused pane now sees the done marker
-  persist until they navigate, rather than it clearing under them.
-- **Not verified on the fleet:** **outstanding, and #55 stays open until it is.**
-  The harness proves this against an isolated server. The acceptance test is the
-  real thing: attach a shell, focus a pane, send a session a one-line question, and
-  the done event should reach Ace within about ten seconds.
-
-### 5. Antigravity reports a false state on its two modals — Quest Log #104
-
-`832d3ebc`, and the `folder_trust_dialog` rule alongside this entry ·
-`src/detect/manifests/antigravity.toml`
-
-Both halves are manifest-only: detection rules, no engine or state-machine change.
-
-**The permission dialog (`832d3ebc`, installed).** The bundled `permission_prompt`
-rule required the literal `edit command`. agy 1.2.5 renders that footer hint as
-`ctrl+g edit/expand command`, and `contains` is an AND (`manifest.rs:1241`), so the
-branch dropped out and took the rule with it. The pane reported `idle`, and
-`herdr agent get` reported `agent_status: done`, while sitting on an unanswered
-question. Replaced with `tab amend` plus a bounded same-line regex
-`(?i)\bedit\b[^\n]{0,32}\bcommand\b`, a superset of the string it replaced.
-
-**The startup trust dialog.** agy's first-launch modal — *"Do you
-trust the contents of this project?"* — had no rule at all, so detection fell
-through to `default_known_agent_idle_fallback` and the pane reported `idle` while
-holding a modal that cannot proceed without a keypress. Same shape of fix and the
-same shape as the existing `qwen:folder_trust_dialog` and `codex:trust_directory`
-rules: `state = "blocked"`, `visible_blocker = true`, gated on the question and
-then on the option list, so prose that merely mentions the modal cannot match.
-`bottom_non_empty_lines(20)`, not `top_non_empty_lines`, because the latter needs
-`min_engine_version >= 3` (`manifest.rs:1333`) and this manifest declares 1.
-
-The manifest `version` is bumped on each change, which is load-bearing:
-`read_remote_manifest` prefers the bundled copy only when the cached remote version
-is strictly older (`manifest.rs:770-784`).
-
-- **Merged:** yes, both on `master`.
-- **Installed:** the matcher 2026-09-17 in `0.9.0+fork.2`; the trust-dialog rule
-  2026-09-17 in `0.9.0+fork.3`. **`fork.3` is installed but not yet live** — the
-  running server still serves the `fork.2` image, so a trust dialog still reports
-  `idle` on this machine until Kyle runs `groundctl stop herdr` / `start herdr`.
-- **Upstream:** worth reporting as a bug. Manifests are data, the wording drift is
-  upstream's to track, and neither fix is fork-specific. Bug-report path only; see
-  the policy note above.
-- **Verified live, not by reading.** The permission fix was re-measured in
-  production after install against a *natural* dialog — `toolPermission: strict` in
-  an isolated `HOME`, no hook forcing it — and read `blocked` / rule
-  `permission_prompt` / `visible_blocker=true`, with Earshot agreeing
-  (`answerability: "blocked"`, `answerable: false`). Each rule's test fails with its
-  rule reverted and passes with it.
-
-### 6. Antigravity prompt box falls through to unknown idle — Quest Log #104
-
-`454adb1d` · `src/detect/manifests/antigravity.toml`
-
-Manifest-only, same shape as patch 5: a detection rule, no engine change. A
-screen sitting at agy's empty prompt box (`>` framed by two horizontal rules)
-had no idle rule at all, so it fell through to
-`default_known_agent_idle_fallback` — `visible_idle: false`,
-`matched_rule: null`. Automation layers (such as Earshot) driving these panes
-refuse to type into an unconfirmed fallback idle state, so the pane was
-stuck, not merely mislabeled.
-
-Added `live_prompt_box`: priority 50 (below the working and blocked rules),
-region `bottom_non_empty_lines(10)`, an anchored regex (`\z`) requiring the
-empty prompt framed by both rules at the foot of the region so text typed
-below the box or prose mentioning rules cannot match, and not-gates vetoing
-active braille spinners, background-task lines, permission dialogs, and the
-folder trust dialog — so a mid-turn screen that keeps drawing the prompt box
-frame is never classified idle. Manifest bumped to `2026.09.17.3`.
-
-Six targeted tests, four of them negative (mid-turn, permission prompt, trust
-dialog, partial input). Revert-and-fail proof run: reverting the rule turns
-the positive tests back into the old fallback verdict
-(`matched_rule: None`, `visible_idle: false`).
-
-- **Merged:** yes, on `master`.
-- **Installed:** 2026-09-17, in `0.9.0+fork.4`. **Installed but not yet
-  live** — the running server still serves the `fork.3` image until Kyle
-  restarts it. See [Installed](#installed).
-- **Upstream:** worth reporting, same reasoning as patch 5 — manifest data,
-  not fork-specific. Bug-report path only.
-- **Verified by the revert-and-fail proof above, not live yet.** No pane has
-  exercised this against a real agy prompt box through a running `fork.4`
-  server; that is the remaining verification once fork.4 goes live.
+- **Known consequence:** a human sitting on a focused pane sees the done marker
+  persist until they navigate.
+- **Not verified on the fleet:** the acceptance test is still outstanding —
+  attach a shell, focus a pane, send a session a one-line question, and the done
+  event should reach Ace within about ten seconds. #55 stays open until it is.
 
 ### 4. Completion suppressed when no client attached — superseded
 
-Branch `fix/done-suppressed-when-no-client-attached` (`6a46ebed`) · **not merged,
-and the recommendation is not to merge it.**
+Branch `fix/done-suppressed-when-no-client-attached` (`6a46ebed`, on `origin`,
+based on the old `58271459`) · **not merged, and the recommendation is not to
+merge it.**
 
 The earlier, narrower fix for #55: `outer_terminal_focus` defaults to `None` and
 `None != Some(false)`, so with nothing attached Herdr concluded a human was
 watching. It adds an `outer_terminal_attached` bool to the predicate.
 
-Patches 2 and 3 supersede it. It removed the predicate from the completion path
-altogether, which covers the detached case *and* the focused case the narrower fix
-never addressed. What remains of `6a46ebed` is a behavioural change to sound and
-toast state while detached — real, since the predicate is still live at
-`actions.rs:2021`, `actions.rs:2108` and `headless.rs:3187`, but no longer fixing
-anything we have observed, and never exercised against a running server.
+Patches 2 and 3 supersede it by removing the predicate from the completion path
+altogether. What remains is a behavioural change to sound and toast state while
+detached, never exercised against a running server, and it conflicts with patch
+2 exactly where patch 2 deleted the lines it edits. Kept as the record of that
+investigation. It has not been rebased and should not be.
 
-It conflicts with patch 2 in two places, both exactly where patch 2 deleted the
-lines it edits. Resolving means taking our side in both, which leaves only the
-untested part. The branch is kept as the record of that investigation.
+- **Upstream:** no.
+
+### 5. Antigravity reports a false state on its two modals — Quest Log #104
+
+`bbee2342` [was `832d3ebc`], `a84932a7` [was `998e7823`] ·
+`src/detect/manifests/antigravity.toml`
+
+Manifest-only: detection rules, no engine change.
+
+**Permission dialog.** The bundled `permission_prompt` rule required the literal
+`edit command`; agy 1.2.5 renders `ctrl+g edit/expand command`, and `contains` is
+an AND, so the rule never matched and a pane sitting on an unanswered question
+reported `idle` / `done`. Replaced with `tab amend` plus a bounded same-line regex
+`(?i)\bedit\b[^\n]{0,32}\bcommand\b`.
+
+**Startup trust dialog.** *"Do you trust the contents of this project?"* had no
+rule, so it fell through to `default_known_agent_idle_fallback`. Added
+`folder_trust_dialog`: `state = "blocked"`, `visible_blocker = true`, gated on
+the question and then on the option list, same shape as
+`qwen:folder_trust_dialog` and `codex:trust_directory`.
+
+The manifest `version` is bumped on each change, which is load-bearing: a cached
+remote manifest wins unless it is strictly older than the bundled one.
+
+- **On build branch:** yes (tests dropped in the rebase; see above).
+- **Upstream base it applies to:** `5a649142`. Upstream has not changed
+  `antigravity.toml` since.
+- **Installed and live on the VM:** `herdr server agent-manifests --json` reports
+  `agy bundled 2026.09.17.3`; the cached remote `agy.toml` is `2026.06.24.1`, older,
+  so ours wins.
+- **Upstream:** worth a bug report — manifest wording drift is upstream's to
+  track, and neither rule is fork-specific.
+- **Verified live on the M6 host** on 2026-09-17 against a natural dialog
+  (`blocked` / `permission_prompt` / `visible_blocker=true`, Earshot agreeing).
+
+### 6. Antigravity prompt box falls through to unknown idle — Quest Log #104
+
+`90095251` [was `454adb1d`] · `src/detect/manifests/antigravity.toml`
+
+agy's empty prompt box (`>` framed by two rules) had no idle rule, so it fell
+through to the fallback — `visible_idle: false`, `matched_rule: null` — and
+automation that refuses to type into an unconfirmed idle (Earshot) was stuck.
+Added `live_prompt_box`: priority 50, `bottom_non_empty_lines(10)`, an anchored
+`\z` regex requiring the empty prompt framed by both rules at the foot of the
+region, and not-gates vetoing spinners, background-task lines, the permission
+dialog and the trust dialog. Manifest `2026.09.17.3`.
+
+- **On build branch:** yes (its six tests dropped in the rebase).
+- **Upstream base it applies to:** `5a649142`.
+- **Installed and live on the VM** (same manifest check as patch 5).
+- **Upstream:** worth a bug report, same reasoning as patch 5.
+- **Not verified live:** no record of a real agy prompt box read through a
+  server serving this rule. Do that before calling #104's idle half done.
+
+### 7. `+fork.N` version label — Quest Log #86
+
+`c345b7c0` [was `1ad17cb6`] · `src/build_info.rs`, `src/release_notes.rs`,
+`src/product_announcements.rs` · plus one `chore: bump fork build to fork.N`
+commit per installed build (`dc7c46d5` fork.2, `c90926fa` fork.3, `76a4996d`
+fork.4).
+
+See [Version label](#version-label). **Upstream:** no.
+
+### 8. Synthetic blocker-gate tests — Quest Log #104
+
+`9136cc19` · `src/detect/manifest/tests.rs` (+155 lines, tests only)
+
+Covers composed blocker gates (AND/OR/NOT) with synthetic manifests, in place of
+the agy screen tests the rebase dropped. Phase 0 of #104. No behaviour change;
+it is in the running binary only in the sense that the binary was built from
+this commit. **Upstream:** no (would need to be a solicited contribution).
 
 ## Installed
 
-Currently installed: **`0.9.0+fork.4`** — patches 1, 2, 3 and both halves of
-patch 5, plus patch 6 — built from `6b6d29b2`, installed 2026-09-17.
+### This VM — `Kyles-Virtual-Machine`, arm64, audited 2026-09-26
 
-**Installed, not yet live.** The server is still running the `fork.3` image;
-a stop/start is Kyle's, and until it happens `herdr --version` from a
-*running* server reports `fork.3` while the binary on disk reports `fork.4`.
-That divergence is expected between install and restart, not a failed
-install.
+| | |
+|---|---|
+| Running process | pid 598, `/Users/kyle/.local/bin/herdr server`, started 2026-09-24 16:42 |
+| Process image | `lsof` shows the text segment is inode 422447, which is the current `~/.local/bin/herdr` (not a replaced file) |
+| `herdr --version` | `herdr 0.9.1+fork.4` |
+| SHA-256 | `a056c207580511a4fcc81b34f8f63b55ff871a9989d008a2f4be87f70dd0f704` |
+| SHA-1 | `82576e4ab8de60193ab437ed919a6cfe8d90a3c6` |
+| Built from | **`9136cc196bdbd2cf859d4b84f00a9c7506dd2222`** (`codex/rebase-upstream-2026-09-21`) — **established, not inferred** |
 
-Verify with **exactly** one of these two commands — the digest you get depends on
-which, and they are not comparable:
+How the "built from" was established:
+
+1. `/Users/kyle/Repos/herdr/target/release/herdr` has the same SHA-256 and the
+   same mtime (2026-09-24 13:33) as the installed binary.
+2. That clone's reflog has exactly one entry: cloned from `Skylled/herdr` at
+   2026-09-24 13:31 at `9136cc19`. Nothing else has ever been checked out there,
+   and the working tree is clean.
+3. **A fresh `cargo build --release --locked` of `9136cc19` into an empty target
+   directory on 2026-09-26 produced a byte-identical binary** (same SHA-256).
+   That is the proof; 1 and 2 are corroboration.
+
+So the running server has patches 1, 2, 3, 5, 6, 7 and 8, on upstream master
+`5a649142`, and not patch 4.
+
+There are **no** `herdr.bak*` files on this VM. There is no rollback binary here;
+the digests recorded for the M6 host below do not describe files on this machine.
+
+Detection state on this VM that is *not* in the binary, and changes behaviour:
+
+- `~/.config/herdr/agent-detection/codex.toml` — a local override (created
+  2026-09-25): remote codex `2026.09.23.1` plus `osc_title_idle` from the bundled
+  manifest. It shadows both bundled and remote codex, including across upgrades,
+  until someone deletes it. Drop it once the build contains upstream `9c96f7dd`
+  (#4563) or later.
+- Most other agents (claude, opencode, …) run from cached **remote** manifests in
+  `~/.local/state/herdr/agent-detection/remote/`, downloaded 2026-09-24 before
+  `manifest_check = false` was set on 2026-09-25. The binary's bundled manifests
+  are not what classifies those panes. `herdr server agent-manifests --json`
+  shows the real source per agent.
+
+### The M6 host — not visible from here
+
+Kyle's M6 host has its own herdr. This audit cannot see it. To record it, run
+there and paste the output into this section:
 
 ```sh
-herdr --version                    # 0.9.0+fork.4   <- since fork.1, this is enough
-shasum -a 256 ~/.local/bin/herdr   # 5907fb4c6d2092956f38012215f0068be45052c880ff95de7e9cc78104cefdc5
-shasum -a 1   ~/.local/bin/herdr   # 841d7cb83cc00f237ba98d04697422e4c86fddd7
+p=$(ps -axo command | awk '/[h]erdr server/{print $1; exit}'); echo "$p"; "$p" --version; shasum -a 256 "$p"; shasum -a 256 ~/.local/bin/herdr*
 ```
 
-> **`shasum` with no `-a` is SHA-1, not SHA-256.** Both digests above are correct
-> for the same file: 40 hex characters is SHA-1, 64 is SHA-256. If what you get is
-> the wrong length to match, you ran the other algorithm — that is not a wrong
-> binary. Check the length before concluding anything. This bit someone on
-> 2026-09-15, on this page, which is the page written to prevent it.
+Then compare the SHA-256 against the table below (and against the VM's
+`a056c207…` above — if it matches, the host is on the same build).
 
-Digests are written in full throughout. A truncated hash is not comparable and
-invites the same mistake this section is about.
+### Historical record (M6 host, before the rebase)
 
-**`~/.local/bin/herdr`** — `0.9.0+fork.4`, patches 1-3, both halves of patch 5,
-and patch 6, built from `6b6d29b2`, installed 2026-09-17:
+Kept because these digests are the only way to identify those binaries. All built
+from the old base `58271459` and report `0.9.0[+fork.N]`. **None of these files
+exist on the VM.** Whether they still exist on the host is unknown.
 
-- SHA-256 `5907fb4c6d2092956f38012215f0068be45052c880ff95de7e9cc78104cefdc5`
-- SHA-1 &nbsp;&nbsp;`841d7cb83cc00f237ba98d04697422e4c86fddd7`
+| Build | Built from | Patches | SHA-256 |
+|---|---|---|---|
+| `0.9.0+fork.4` | `6b6d29b2` | 1-3, 5, 6, 7 | `5907fb4c6d2092956f38012215f0068be45052c880ff95de7e9cc78104cefdc5` |
+| `0.9.0+fork.3` | `8664b312` | 1-3, 5, 7 | `36b809a0e5ba382572119b7842e6f0d48d9fbd618d7fff62ccac49388e90485f` |
+| `0.9.0+fork.2` | `85c3edac` | 1-3, 5 (matcher), 7 | `875e733ee9b43e95469a9d0767ca4528be9e9c04ddf4ec90d9d4e38e0545a52f` |
+| `0.9.0+fork.1` | `1ad17cb6` | 1-3, 7 | `6cb85acdaa3c28b2d6ff187a22dd5374500f45edc84fa83eba64cc00270110e6` |
+| `0.9.0` (unlabelled) | uncommitted at the time | 1, 2 | `c7e140b218e8d35b77b035a17b688777846f716143b90b5467e1b3b693877d80` |
+| `0.9.0` (unlabelled) | uncommitted for 3 days | 1 | `95ab73bf07d57b95e98302a4ce61da087b18a1b59df5aa39313958e39bb2afcb` |
+| `0.9.0` stock | upstream `v0.9.0` | none | `32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17` |
 
-**`~/.local/bin/herdr.bak`** — `0.9.0+fork.3`, patches 1-3 and both halves of
-patch 5, built from `8664b312`, the image that ran from 2026-09-17 until the
-next restart. This is the rollback target, and it is the unsuffixed `.bak`,
-so the next install will overwrite it. Digest re-verified from disk
-immediately before the `fork.4` swap, so this is the file, not a copied
-number:
+SHA-1 digests for these are in this file's history (`git show 5f9d5c71:FORK.md`).
 
-- SHA-256 `36b809a0e5ba382572119b7842e6f0d48d9fbd618d7fff62ccac49388e90485f`
-- SHA-1 &nbsp;&nbsp;`0b3e1c42dc3a85b9f11d838a8f6cfbb53418212a`
-
-**`0.9.0+fork.2`** — patches 1-3 and the matcher half of patch 5, built from
-`85c3edac`, the image that ran 2026-09-17 21:38 until the `fork.3` restart.
-**No longer on disk**: it occupied the unsuffixed `.bak` and the `fork.4`
-install overwrote it, as this section says it would. Recorded so the digest
-survives the file:
-
-- SHA-256 `875e733ee9b43e95469a9d0767ca4528be9e9c04ddf4ec90d9d4e38e0545a52f`
-- SHA-1 &nbsp;&nbsp;`7b37f7ba9d02370aff11e9845b679620e8c11dbd`
-
-**`0.9.0+fork.1`** — patches 1-3, built from `1ad17cb6`, the image that ran
-2026-09-15 to 2026-09-17. **No longer on disk**: it occupied the unsuffixed `.bak`
-and the `fork.3` install overwrote it, as this section says it would. Recorded so
-the digest survives the file:
-
-- SHA-256 `6cb85acdaa3c28b2d6ff187a22dd5374500f45edc84fa83eba64cc00270110e6`
-- SHA-1 &nbsp;&nbsp;`fccfb29ae4e088712a9718b23c0d0eea9ccb7906`
-
-Reproducible (of `fork.1`): a full `cargo clean -p herdr` and rebuild produced a
-byte-identical binary, which is how that artefact was reconciled against the instrumented and
-candidate builds that had been sitting in `target/release/` during the #55
-investigation.
-
-**One-deep rollback.** Only `herdr.bak` is a fork-labelled rollback target, and each
-install consumes it. If you need to keep the outgoing image, copy it to a *suffixed*
-name before swapping — the `Installing` recipe below uses a dated suffix for exactly
-that reason, and the unsuffixed `.bak` used here is the shorter-lived convention the
-last three installs have actually followed.
-
-**`~/.local/bin/herdr.bak-0.9.0-fork0-20260915b`** — 0.9.0 + patches 1 and 2, the
-unlabelled build that ran 2026-09-15 19:36 to 21:05:
-
-- SHA-256 `c7e140b218e8d35b77b035a17b688777846f716143b90b5467e1b3b693877d80`
-- SHA-1 &nbsp;&nbsp;`19c16da4d2ca586061f00bba8c042374db3e2536`
-
-**`~/.local/bin/herdr.bak-0.9.0-altscreen-20260915`** — 0.9.0 + patch 1, the image
-that ran 2026-09-11 to 2026-09-15:
-
-- SHA-256 `95ab73bf07d57b95e98302a4ce61da087b18a1b59df5aa39313958e39bb2afcb`
-- SHA-1 &nbsp;&nbsp;`96855d935c66b2a9393fbe451a021336c78c2f03`
-
-**`~/.local/bin/herdr.bak-0.9.0-stock-20260910`** — stock 0.9.0:
-
-- SHA-256 `32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17`
-- SHA-1 &nbsp;&nbsp;`88bc05f68abe28d65536414ce5844b110679bc7f`
-
-Everything from `fork.1` onward identifies itself: `herdr --version` and the API
-`version` field both report `0.9.0+fork.N`. **The three older binaries above all
-report a bare `0.9.0` and cannot be told apart except by hashing.**
+> **`shasum` with no `-a` is SHA-1, not SHA-256.** 40 hex characters is SHA-1,
+> 64 is SHA-256. If what you get is the wrong length to match, you ran the other
+> algorithm — that is not a wrong binary. Write digests in full; a truncated hash
+> invites the same mistake.
 
 **An install is not live until the server restarts.** The running process keeps
-serving the old image; install and restart are separate events and only the second
-changes behaviour.
+serving the old image. On this VM that is currently moot: the process started
+after the binary was written and maps the current inode.
 
 ## Version label
 
-Our builds report **`0.9.0+fork.N`** — upstream's version, then semver build
-metadata naming ours. Shipped in `fork.1`, 2026-09-15.
+Our builds report **`<upstream>+fork.N`** — upstream's `Cargo.toml` version, then
+semver build metadata naming ours. `FORK_BUILD` is a constant in
+`src/build_info.rs`; it is currently `4`.
 
-**Bump `FORK_BUILD` in `src/build_info.rs` once per INSTALLED build**, in the same
-commit that records the new digest above. Builds that are never installed do not
-get a number; the counter tracks what has actually run, which is the question this
-file exists to answer. It is a plain counter rather than a git SHA because the SHA
-is already recorded against the checksum, and a counter is short enough to read
-aloud.
+### How fork.N is cut
 
-Where it shows up: `herdr --version`, and the API `version` field — so
-`session_list` now distinguishes our build from stock without hashing anything.
+1. Land the patch commit(s) on the build branch.
+2. Build, test, and install (see [Installing](#installing)).
+3. In a separate commit, `chore: bump fork build to fork.N`, increment
+   `FORK_BUILD` — **only for a build that is actually installed**. Builds that
+   are never installed do not get a number.
+4. In a `docs: record fork.N as installed` commit, record both digests and the
+   source SHA here.
+
+In practice steps 2 and 3 have been done in the other order (bump, build that
+commit, install), which is fine as long as the recorded SHA is the bump commit.
+
+### The label no longer identifies a build on its own
+
+**`0.9.1+fork.4` (VM) and `0.9.0+fork.4` (M6 host) are different binaries** with
+the same N: the rebase changed the upstream half of the label but did not bump
+`FORK_BUILD`, and the VM build was installed without a bump commit or a digest
+record. Two consequences:
+
+- `herdr --version` distinguishes 0.9.0 from 0.9.1, but within a base N was
+  meant to be unique, and nothing stops a future 0.9.1 build with different
+  patches also reporting `fork.4`.
+- The VM install broke the "one bump per installed build" rule. This audit is
+  its digest record, after the fact.
+
+**Recommendation:** make N monotonic across rebases — the next installed build is
+`fork.5` regardless of base — and treat "installed without a bump" as the thing
+to avoid. Not changed here: this is a docs-only commit.
 
 ### Where the label lives, and why not in Cargo.toml
 
-`FORK_BUILD` is a constant in `src/build_info.rs`. It must **not** move into
-`Cargo.toml`. `update::Version::parse` splits `CARGO_PKG_VERSION` on `.` and
-requires exactly three integer parts, and `Version::current()` calls `.expect()`
-on the result — so a `0.9.0+fork.1` there panics the update checker at runtime.
-Keeping `BASE_VERSION` a clean `0.9.0` means every comparison is untouched and
-only the display and API strings carry the label. `build_info` has a test
-asserting this invariant; if it fails, do not "fix" it by loosening the assert.
+`FORK_BUILD` must **not** move into `Cargo.toml`. `update::Version::parse` splits
+`CARGO_PKG_VERSION` on `.` and requires exactly three integer parts, and
+`Version::current()` calls `.expect()` on the result — so a `+fork.N` there panics
+the update checker. Keeping `BASE_VERSION` clean means every comparison is
+untouched and only the display and API strings carry the label. `build_info` has
+a test asserting this; if it fails, do not "fix" it by loosening the assert.
 
-`+` is build metadata, which semver defines as **ignored for precedence**, so
-`0.9.0+fork.1` compares equal to `0.9.0` and a genuine upstream release still
-reads as newer.
+`+` is build metadata, which semver ignores for precedence, so a genuine upstream
+release still reads as newer.
 
-### What was checked before shipping it
-
-The constraint this file recorded was that the label must not break anything
-parsing the version. All four were checked:
-
-- **Update checker** — uses `BASE_VERSION`, not `version()`. Unaffected.
-- **Protocol handshake** — carries `server_version`, but only logs it. No equality
-  test anywhere in the tree; compatibility gates on `PROTOCOL_VERSION` and codecs.
-- **Handoff** — `server/handoff.rs` compares `expected_version` against our own
-  `version()`. Both sides are the same binary, so it stays self-consistent.
-- **Earshot** — reports the live version but never compares it, and
-  `PROBED_HERDR_VERSION` is Earshot's own hardcoded constant, unrelated to what
-  the server reports.
-
-**One real breakage was found and fixed rather than shipped.** Release notes and
-product announcements are keyed by version string, and a "seen" marker stored for
-`0.9.0` would never match `0.9.0+fork.1` — so the notes would have reappeared on
-every startup, forever. They now use `build_info::release_version()`, which is
-`version()` without our label. 18 tests caught it. If you add another
-version-keyed store, key it on `release_version()`, not `version()`.
+Checked before shipping `fork.1`: the update checker uses `BASE_VERSION`; the
+protocol handshake only logs `server_version`; handoff compares our own
+`version()` on both sides; Earshot reports but never compares it. Release notes
+and product announcements are keyed by version string, so they use
+`build_info::release_version()` (no label) — otherwise they would reappear on
+every startup. If you add another version-keyed store, key it on
+`release_version()`.
 
 ## Installing
 
@@ -413,30 +447,28 @@ version-keyed store, key it on `release_version()`, not `version()`.
 > decides whether every pane dies.** This is Kyle's deliberate act, not a step an
 > agent performs.
 >
-> - `groundctl stop herdr` then `groundctl start herdr` — **panes survive.** Done
->   on 2026-09-15: the server came back as a new pid and all eleven panes,
->   including the agent pane driving the install, were still there.
+> - `groundctl stop herdr` then `groundctl start herdr` — **panes survive.**
 > - A `bootout`-style restart **SIGKILLs the process group and takes every pane
->   with it.** This is what went wrong in the fleet-wide apply earlier on
->   2026-09-15. Do not reach for it.
+>   with it.** Do not reach for it.
 >
-> The other failure seen on 2026-09-15 was a restart that could not take the socket
-> back because an orphaned server still held it. If that happens, stop the orphan
-> first, confirm the socket cleared, then start.
+> If a restart cannot take the socket back because an orphaned server still holds
+> it, stop the orphan first, confirm the socket cleared, then start.
 
 Build only, safe at any time:
 
 ```sh
-cargo build --release          # needs Zig 0.16 for the vendored libghostty-vt
-cargo test --bins
-cargo fmt --check
-cargo clippy --all-targets
+cargo build --release --locked   # needs Zig 0.16 for the vendored libghostty-vt
+just check
 ```
+
+The release build is reproducible for a given commit and checkout path (proved
+for `fork.1` and again on the VM for `9136cc19`), so "which commit is this
+binary?" can always be answered by rebuilding the candidate and comparing digests.
 
 To install, by hand:
 
 ```sh
-# 1. back up what is running, and record what it was
+# 1. back up what is running, with a dated suffix, and record what it was
 cp -p ~/.local/bin/herdr ~/.local/bin/herdr.bak-$(date +%Y%m%d)
 shasum -a 256 ~/.local/bin/herdr.bak-$(date +%Y%m%d)
 
@@ -445,41 +477,102 @@ cp target/release/herdr ~/.local/bin/herdr.new
 chmod +x ~/.local/bin/herdr.new
 mv ~/.local/bin/herdr.new ~/.local/bin/herdr
 
-# 3. record BOTH digests here. Bump FORK_BUILD in src/build_info.rs in the
-#    same commit -- the counter tracks installed builds, not every build.
+# 3. record BOTH digests here, and bump FORK_BUILD in the same change.
 shasum -a 256 ~/.local/bin/herdr
 shasum -a 1   ~/.local/bin/herdr
 herdr --version
 
 # 4. stop, confirm the socket is clear, then start -- panes survive this.
-#    Do NOT bootout: that SIGKILLs the process group and kills every pane.
 groundctl stop herdr
 groundctl start herdr
 ```
 
 Rollback is the same swap with the backup, and another stop/start.
 
-Leave `~/.config/herdr/` alone. Manifest auto-update is deliberately disabled and
-the manifests are pinned; see Quest Log #22.
+Leave `~/.config/herdr/` alone unless a Quest Log item says otherwise. See Quest
+Log #22 for the manifest pinning and override story.
+
+## Git layout and tracking
+
+Remotes (unchanged by this audit):
+
+- `origin` = `Skylled/herdr` (our fork, `isFork: true`, parent `herdrdev/herdr`)
+- `upstream` = `herdrdev/herdr` (fetch only, in practice)
+
+Branches on `origin` that matter:
+
+| Branch | Tip | What it is |
+|---|---|---|
+| `codex/rebase-upstream-2026-09-21` | `9136cc19` | **the build branch** — what the VM runs |
+| `fork/master` | `5f9d5c71` | pre-rebase line of development (old base), fork.4 on the host |
+| `backup/pre-rebase-2026-09-21` | `8d0446a3` | `fork/master` + the Q22 report; pre-rebase snapshot |
+| `m1-local-master` | `8d0446a3` | identical to the backup above |
+| `backup/mac-mini-2026-09-17` | `a6cde880` | fork.1-era snapshot |
+| `fix/*` (four) | — | per-patch branches, all on the old base; patches 1-3 merged, 4 not |
+| `master` | `32503f81` | stale mirror of upstream (#4148), behind our base |
+
+### Tracking config, as found 2026-09-26 on the VM
+
+- **There is no local `master` and no local `main`** in `/Users/kyle/Repos/herdr`.
+  The clone has only `codex/rebase-upstream-2026-09-21`, tracking
+  `origin/codex/rebase-upstream-2026-09-21`. So the 2026-09-15 foot-gun (local
+  `master` tracking `upstream/master`, where a bare `git push` would aim at
+  herdrdev) **does not exist on this VM**. Whether it still exists in the M6
+  host's clone is unknown; the old record says it was fixed there on 2026-09-15
+  (`branch.master.remote = origin`).
+- `origin/HEAD` → `origin/master`, which is the stale mirror. A fresh
+  `git checkout master` would create a local master from that, 58 commits behind
+  the base we actually build.
+
+**Recommendation (not applied):**
+
+1. Make the build branch a stable name. Push the build branch to `origin` as
+   `fork/master` (it is currently the old-base line; replacing it is a
+   non-fast-forward, so that is Kyle's call), or better, a new name such as
+   `fork/main`, and set it as the fork's default branch on GitHub so
+   `origin/HEAD` points at what we run.
+2. Leave `origin/master` as a plain mirror of upstream, or delete it; never build
+   from it.
+3. Any local `master`/`main` should track `origin`, never `upstream`; and to make
+   an accidental push to upstream impossible rather than unlikely:
+   `git remote set-url --push upstream DISABLED`.
+4. Push with explicit refspecs (`git push origin HEAD:refs/heads/<name>`).
+
+## Loose ends
+
+- **`q22-manifest-override-report.md` is tracked at the repo root again.** It was
+  deliberately untracked on 2026-09-15 (`79dd4b59`: "analysis of our deployment
+  … not herdr source. It belongs on Quest Log #22"), then re-added on 2026-09-20
+  (`b3228938`, a Sonnet session) and carried through the rebase. It describes the
+  old `0.9.0` binary and the old base. Recommend moving it to Quest Log #22 and
+  removing it from the tree in its own commit. Not touched here.
+- **Patch 4's branch** is on the old base and unmerged; keep as a record or
+  delete, but never merge.
+- **`fork/master`, `m1-local-master`, both `backup/*`** are old-base snapshots.
+  Once the M6 host is confirmed on a post-rebase build, three of the four are
+  redundant.
+- **The VM build was never given a bump or a digest commit** (see
+  [Version label](#version-label)).
+- **The agy screen tests are gone** from the build branch; patches 5 and 6 are
+  protected by live smoke tests only.
+- **#55 fleet acceptance test** (patch 3) and **agy live prompt-box check**
+  (patch 6) are still outstanding.
+- **Upstream `28360107` (#4457)** needs reading against patches 2 and 3 before
+  the next rebase.
+- **VM codex override** must be dropped when the build includes #4563.
 
 ## Base decision
 
-**Decided 2026-09-15: stay on `58271459`.** Kyle: *"let's stay put. Everything
-works, so let's keep it that way."*
+**2026-09-15: stay on `58271459`.** Kyle: *"let's stay put. Everything works, so
+let's keep it that way."* The reasoning — installing is the expensive operation,
+and a rebase would make one restart deliver our patches *and* many unexercised
+upstream commits at once — still holds as a principle.
 
-The alternative was rebasing onto `origin/master` (`32503f81`, #4148), which was
-probed and applies cleanly. It was rejected because installing is the expensive
-operation, not rebasing: every install costs a restart of the component that
-watches every session, and a rebase would make that restart deliver our patches
-*and* 84 unexercised upstream commits at once. If something then misbehaved there
-would be no way to attribute it. Keep the risky
-operation carrying one variable.
+**2026-09-21: rebased onto `5a649142` anyway**, on
+`codex/rebase-upstream-2026-09-21`, and that is what the VM has run since
+2026-09-24. No record of who decided or why was found in the repo. The VM was a
+fresh install, so the "one variable per restart" concern did not apply there; it
+still applies to the M6 host if it moves from `0.9.0+fork.4`.
 
-Consequence: `origin/master` stays ahead of what we build, so `master` cannot be
-pushed under its own name without rewriting published history. Publish additively
-instead — the fork's line of development is on the `fork/master` branch.
-
-This is not permanent. Revisit after an upstream major release, or when
-[Check upstream before writing a patch](#check-upstream-before-writing-a-patch)
-turns up something we want. When it happens it should be its own job: rebase, full
-suite, install, verify, and only then land anything new on top.
+Next time, make the rebase its own job: rebase, full suite, install, verify, record
+here, and only then land anything new on top.
