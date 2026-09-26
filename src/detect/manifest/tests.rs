@@ -1036,3 +1036,93 @@ contains = ["dialog-marker"]
         }
     });
 }
+
+#[test]
+fn persistent_prompt_screen_guards_prevent_title_idle_bypass() {
+    // Synthetic runtime controls verify cross-region precedence. A veto on
+    // one idle rule alone must not leave another idle source able to win.
+    with_manifest_dirs("screen-guards-title-idle", || {
+        write_local_codex(&rules_manifest(
+            r#"
+[[rules]]
+id = "title_ready"
+state = "idle"
+priority = 100
+region = "osc_title"
+visible_idle = true
+regex = ['\S']
+
+[[rules]]
+id = "screen_ready"
+state = "idle"
+priority = 200
+visible_idle = true
+regex = ['(?m)^EMPTY COMPOSER\nMODEL FOOTER\s*\z']
+not = [{ contains = ["activity-marker"] }, { contains = ["question-marker"] }]
+
+[[rules]]
+id = "screen_busy_guard"
+state = "working"
+priority = 450
+visible_working = true
+all = [{ line_regex = ['^EMPTY COMPOSER$'] }]
+contains = ["activity-marker"]
+
+[[rules]]
+id = "screen_question_guard"
+state = "blocked"
+priority = 650
+visible_blocker = true
+all = [{ line_regex = ['^EMPTY COMPOSER$'] }]
+contains = ["question-marker"]
+
+[[rules]]
+id = "title_activity"
+state = "working"
+priority = 1050
+region = "osc_title"
+visible_working = true
+contains = ["title-busy-marker"]
+"#,
+        ));
+        let chrome = "EMPTY COMPOSER\nMODEL FOOTER";
+        for title in ["", "static-title"] {
+            for (signals, state) in [
+                ("", AgentState::Idle),
+                ("activity-marker", AgentState::Working),
+                ("question-marker", AgentState::Blocked),
+                ("activity-marker question-marker", AgentState::Blocked),
+            ] {
+                let screen = format!("{signals}\n{}{chrome}", "output\n".repeat(20));
+                let result = explain_with_input(
+                    Agent::Codex,
+                    DetectionInput {
+                        screen: &screen,
+                        osc_title: title,
+                        osc_progress: "",
+                    },
+                );
+                assert_eq!(result.state, state, "{screen:?}, {title:?}");
+                assert_eq!(result.visible_idle, state == AgentState::Idle);
+                assert_eq!(result.visible_working, state == AgentState::Working);
+                assert_eq!(result.visible_blocker, state == AgentState::Blocked);
+                if !signals.is_empty() {
+                    assert!(result
+                        .evaluated_rules
+                        .iter()
+                        .any(|rule| { rule.id == "screen_ready" && !rule.matched }));
+                }
+            }
+        }
+        let result = explain_with_input(
+            Agent::Codex,
+            DetectionInput {
+                screen: chrome,
+                osc_title: "title-busy-marker",
+                osc_progress: "",
+            },
+        );
+        assert_eq!(result.state, AgentState::Working);
+        assert!(!result.visible_idle);
+    });
+}
