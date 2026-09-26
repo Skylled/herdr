@@ -940,3 +940,99 @@ contains = ["active"]
 "#;
     assert!(parse_manifest(manifest).is_err());
 }
+
+#[test]
+fn anchored_idle_chrome_requires_empty_body_and_final_footer() {
+    // Synthetic chrome exercises the engine contract without freezing a
+    // harness's current screen wording or bundled rule identifiers.
+    with_manifest_dirs("anchored-idle-chrome", || {
+        write_local_codex(&rules_manifest(
+            r#"
+[[rules]]
+id = "ready"
+state = "idle"
+visible_idle = true
+region = "whole_recent"
+regex = ['(?m)^(?:BODY(?: placeholder)?\r?\n){2,}MODE [^\r\n]+\r?\nBORDER\r?\nFOOTER(?:\r?\n[ \t]*)*\z']
+not = [
+  { contains = ["busy-marker"] },
+  { contains = ["interrupt-marker"] },
+  { contains = ["dialog-marker"] },
+]
+"#,
+        ));
+        let ready = "BODY\nBODY\nMODE model\nBORDER\nFOOTER";
+        for screen in [
+            ready.to_string(),
+            format!("completed output\n{ready}\n\n"),
+            ready.replace("BODY\nBODY", "BODY\nBODY placeholder\nBODY"),
+            ready.replace('\n', "\r\n"),
+        ] {
+            assert!(explain(Agent::Codex, &screen).visible_idle, "{screen:?}");
+        }
+        for screen in [
+            ready.replace("BODY\nBODY", "BODY\nBODY typed input"),
+            ready.replace("BODY\nBODY", "BODY"),
+            ready.replace("BORDER\n", ""),
+            ready.replace("FOOTER", ""),
+            format!("{ready}\nlater output"),
+            "ordinary output".to_string(),
+        ] {
+            let result = explain(Agent::Codex, &screen);
+            assert!(!result.visible_idle, "{screen:?}");
+            assert!(result.matched_rule.is_none(), "{screen:?}");
+        }
+        // A veto outside the bottom ten lines must still suppress visible idle.
+        for marker in ["busy-marker", "interrupt-marker", "dialog-marker"] {
+            let screen = format!("{marker}\n{}{ready}", "output\n".repeat(20));
+            let result = explain(Agent::Codex, &screen);
+            assert!(!result.visible_idle, "{screen:?}");
+            assert!(result.matched_rule.is_none(), "{screen:?}");
+        }
+    });
+}
+
+#[test]
+fn visible_activity_and_blockers_outrank_persistent_idle_chrome() {
+    with_manifest_dirs("idle-chrome-priority", || {
+        write_local_codex(&rules_manifest(
+            r#"
+[[rules]]
+id = "ready"
+state = "idle"
+priority = 50
+visible_idle = true
+contains = ["prompt-marker"]
+
+[[rules]]
+id = "active"
+state = "working"
+priority = 100
+visible_working = true
+regex = ['(?i)\binterrupt-marker\b']
+
+[[rules]]
+id = "authorization"
+state = "blocked"
+priority = 300
+visible_blocker = true
+contains = ["dialog-marker"]
+"#,
+        ));
+        for (screen, state) in [
+            ("prompt-marker", AgentState::Idle),
+            ("prompt-marker INTERRUPT-MARKER", AgentState::Working),
+            ("prompt-marker dialog-marker", AgentState::Blocked),
+            (
+                "prompt-marker interrupt-marker dialog-marker",
+                AgentState::Blocked,
+            ),
+        ] {
+            let result = explain(Agent::Codex, screen);
+            assert_eq!(result.state, state, "{screen:?}");
+            assert_eq!(result.visible_idle, state == AgentState::Idle);
+            assert_eq!(result.visible_working, state == AgentState::Working);
+            assert_eq!(result.visible_blocker, state == AgentState::Blocked);
+        }
+    });
+}

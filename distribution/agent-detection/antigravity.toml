@@ -1,7 +1,7 @@
 id = "agy"
-version = "2026.06.24.1"
+version = "2026.09.26.1"
 min_engine_version = 1
-updated_at = "2026-06-24T00:00:00Z"
+updated_at = "2026-09-26T00:00:00Z"
 aliases = ["antigravity", "antigravity-cli"]
 
 [[rules]]
@@ -13,7 +13,25 @@ visible_blocker = true
 contains = ["requesting permission for:"]
 any = [
   { contains = ["do you want to proceed?"] },
-  { contains = ["tab amend", "edit command"] },
+  # agy renders this footer hint as "ctrl+g edit command" (<=1.2.4) and
+  # "ctrl+g edit/expand command" (1.2.5). Match edit..command on one line with a
+  # short gap so a further wording change does not silently drop the branch.
+  { contains = ["tab amend"], regex = ['(?i)\bedit\b[^\n]{0,32}\bcommand\b'] },
+]
+
+[[rules]]
+id = "folder_trust_dialog"
+state = "blocked"
+priority = 310
+region = "bottom_non_empty_lines(20)"
+visible_blocker = true
+# agy's startup modal: it cannot proceed without a keypress, so the pane is
+# blocked, not idle. Gate on the question, then confirm the option list is
+# really on screen so prose that merely mentions the modal cannot match.
+contains = ["do you trust the contents of this project?"]
+any = [
+  { contains = ["yes, i trust this folder"] },
+  { contains = ["no, exit"] },
 ]
 
 [[rules]]
@@ -31,3 +49,29 @@ priority = 90
 region = "bottom_non_empty_lines(5)"
 visible_working = true
 line_regex = ['(?i)·\s*[1-9][0-9]*\s+task']
+
+[[rules]]
+id = "live_prompt_box"
+state = "idle"
+priority = 50
+region = "whole_recent"
+visible_idle = true
+# Based on agy 1.2.1 captures in Earshot (7f165a0, 2026-09-11).
+# agy's prompt box: an empty prompt line (">") framed by two horizontal rules
+# (at least 20 box-drawing characters). The rule is anchored to the foot of
+# the region (\z) so text typed below the box or prose containing rules cannot
+# match. Mid-turn screens keep drawing the prompt box, so the not-gates veto
+# active spinners, interrupt hints, background tasks, and blocked dialogs.
+# Use the detection snapshot so vetoes above the last ten lines still apply.
+regex = ['(?m)^[ \t]*─{20,}[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*>[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*─{20,}[ \t]*(?:\r?\n[ \t]*)*\z']
+not = [
+  { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
+  { regex = ['(?i-u:\b(?:esc|ctrl\+c)(?:\s+again)?(?:\s+to)?\s+interrupt\b)'] },
+  { regex = ['(?i)·\s*[1-9][0-9]*\s+task'] },
+  { contains = ["requesting permission for:"] },
+  { contains = ["run this command?"] },
+  { contains = ["do you want to proceed?"] },
+  { contains = ["tab amend"] },
+  { contains = ["do you trust the contents of this project?"] },
+  { contains = ["yes, i trust this folder"] },
+]
