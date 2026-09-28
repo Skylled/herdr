@@ -313,6 +313,80 @@ contains = ["activity-marker"]
 }
 
 #[test]
+fn blocked_chooser_requires_every_regex_and_a_final_footer_alternative() {
+    // Startup-chooser gates: header and footer wording can each have layout
+    // variants, every top-level regex must match, and the footer must end the
+    // bounded region so a later composer line makes the chooser stale.
+    with_manifest_dirs("blocked-chooser-footer", || {
+        write_local_codex(&rules_manifest(
+            r#"
+[[rules]]
+id = "chooser"
+state = "blocked"
+priority = 30
+region = "bottom_non_empty_lines(6)"
+visible_blocker = true
+contains = ["option-marker"]
+regex = [
+  'HEADER(?:!|[ \t]+·)',
+  'persist\s+marker',
+  '(?:OLD FOOTER|(?m:^[ \t]*)new footer(?: · [^\r\n]*)?)\s*\z',
+]
+"#,
+        ));
+
+        for (screen, matched) in [
+            (
+                "HEADER! 1\noption-marker\npersist marker\nOLD FOOTER   \n",
+                true,
+            ),
+            (
+                "  HEADER · 1\noption-marker\npersist\n  marker\n\n  new footer · hint\n\n\n",
+                true,
+            ),
+            (
+                "HEADER · 1\noption-marker\npersist marker\nnew footer",
+                true,
+            ),
+            ("HEADER 1\noption-marker\npersist marker\nOLD FOOTER", false),
+            ("HEADER! 1\npersist marker\nOLD FOOTER", false),
+            ("HEADER! 1\noption-marker\nOLD FOOTER", false),
+            (
+                "HEADER! 1\noption-marker\npersist marker\nOLD FOOTER\ncomposer",
+                false,
+            ),
+            (
+                "HEADER · 1\noption-marker\npersist marker\nnew footer · hint\ncomposer",
+                false,
+            ),
+            (
+                "HEADER · 1\noption-marker\npersist marker\nsee new footer",
+                false,
+            ),
+            (
+                "HEADER! 1\none\ntwo\nthree\noption-marker\npersist marker\nOLD FOOTER",
+                false,
+            ),
+        ] {
+            let result = explain(Agent::Codex, screen);
+            let expected = if matched {
+                AgentState::Blocked
+            } else {
+                AgentState::Idle
+            };
+            assert_eq!(result.state, expected, "{screen:?}");
+            assert_eq!(
+                result.matched_rule.as_ref().map(|r| r.id.as_str()),
+                matched.then_some("chooser"),
+                "{screen:?}"
+            );
+            assert_eq!(result.visible_blocker, matched, "{screen:?}");
+            assert_eq!(result.fallback_reason.is_some(), !matched, "{screen:?}");
+        }
+    });
+}
+
+#[test]
 fn remote_manifest_loads_between_local_override_and_bundled() {
     with_manifest_dirs("remote-source", || {
         write_remote_codex(&remote_manifest("9999.01.01.1", "blocked", "remote-ready"));

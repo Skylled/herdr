@@ -28,10 +28,11 @@ Last audited **2026-09-26**, against `codex/rebase-upstream-2026-09-21` at
 | 6 | agy prompt box idle rule | #104 | yes, `90095251` | yes, live | bug report |
 | 7 | `+fork.N` version label | #86 | yes, `c345b7c0` + bumps | yes | no |
 | 8 | Synthetic blocker-gate engine tests | #104 | yes, `9136cc19` | yes (tests only) | no |
+| 9 | Codex 0.158 startup update chooser | #201 | branch `fix/codex-startup-update-201` | **no** (and shadowed by the VM override) | bug report |
 
-Eight entries: six behavioural fixes (1, 2, 3, 5, 6, and the superseded 4), one
-fork-identity feature (7), one test-only commit (8). **Seven are on the build
-branch; patch 4 is not.**
+Nine entries: seven behavioural fixes (1, 2, 3, 5, 6, 9, and the superseded 4),
+one fork-identity feature (7), one test-only commit (8). **Seven are on the build
+branch; patches 4 and 9 are not.**
 
 ## Why a file date is not evidence
 
@@ -303,6 +304,28 @@ the agy screen tests the rebase dropped. Phase 0 of #104. No behaviour change;
 it is in the running binary only in the sense that the binary was built from
 this commit. **Upstream:** no (would need to be a solicited contribution).
 
+### 9. Codex 0.158 startup update chooser reads as fallback idle — Quest Log #201
+
+Branch `fix/codex-startup-update-201`, off `76a0da21` · `src/detect/manifests/codex.toml`,
+`distribution/agent-detection/codex.toml`, `src/detect/manifest/tests.rs`
+
+Codex 0.158 reworded its startup update chooser: `Update available! A -> B` became
+`Update available · A → B`, and `Press enter to continue` became
+`enter continue · esc skip`. `startup_update` required both old literals, so the
+new chooser matched nothing and fell back to `default_known_agent_idle_fallback`.
+The rule now accepts either header and either footer; `Update now`,
+`Skip until next version` and a footer that ends the region are still required.
+Manifest `2026.09.28.1`. Checked offline with `agent explain --file` (isolated
+`XDG_*` dirs) against the exact 0.157.1 → 0.158.0 screen, both old layouts, and
+negatives. The new synthetic test covers the conjunctive `regex` list with a final
+footer alternative.
+
+- **Not installed.** The VM's `codex.toml` override (see
+  [VM codex override](#loose-ends)) still has the old rule and shadows the bundled
+  manifest, so installing a build is not enough: the override's `startup_update`
+  needs the same edit, followed by `herdr server reload-agent-manifests`.
+- **Upstream:** bug report (upstream's `startup_update` has the same literals).
+
 ## Installed
 
 ### This VM — `Kyles-Virtual-Machine`, arm64, audited 2026-09-26
@@ -560,6 +583,8 @@ Branches on `origin` that matter:
 - **Upstream `28360107` (#4457)** needs reading against patches 2 and 3 before
   the next rebase.
 - **VM codex override** must be dropped when the build includes #4563.
+- **Patches from Skylled/herdr#2** (`139e4d84` agy/opencode, `c4320480` codex
+  `live_prompt_box`) are on the build branch but not inventoried above.
 
 ## Base decision
 

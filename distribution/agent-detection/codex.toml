@@ -1,7 +1,7 @@
 id = "codex"
-version = "2026.09.26.1"
+version = "2026.09.28.1"
 min_engine_version = 3
-updated_at = "2026-09-26T00:00:00Z"
+updated_at = "2026-09-28T00:00:00Z"
 
 [[rules]]
 id = "osc_title_blocked"
@@ -48,8 +48,15 @@ state = "blocked"
 priority = 950
 region = "bottom_non_empty_lines(20)"
 visible_blocker = true
-contains = ["Update available!", "Update now"]
-regex = ['Skip\s+until\s+next\s+version', 'Press enter to continue\s*\z']
+# Codex 0.158 changed the header from "Update available! A -> B" to
+# "Update available · A → B" and the footer from "Press enter to continue" to
+# "enter continue · esc skip". Keep both; the footer must still end the screen.
+contains = ["Update now"]
+regex = [
+  'Update available(?:!|[ \t]+·)',
+  'Skip\s+until\s+next\s+version',
+  '(?:Press enter to continue|(?m:^[ \t]*)enter continue(?: · [^\r\n]*)?)\s*\z',
+]
 
 [[rules]]
 id = "live_strong_blocker"
