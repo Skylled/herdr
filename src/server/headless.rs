@@ -250,6 +250,7 @@ pub struct HeadlessServer {
     pending_handoff_repaint_nudge: bool,
     /// Flag set by Ctrl+C or `server stop` signal.
     should_quit: Arc<AtomicBool>,
+    host_shutdown_requested: Arc<AtomicBool>,
     /// Channel for receiving server events from client connection threads.
     server_event_rx: mpsc::Receiver<ServerEvent>,
     /// Sender for server events (cloned for each client thread).
@@ -373,6 +374,7 @@ impl HeadlessServer {
             headless_size,
             effective_size: headless_size,
             shutting_down: false,
+            host_shutdown_requested: Arc::new(AtomicBool::new(false)),
             handoff_in_progress: false,
             #[cfg(unix)]
             pending_handoff_repaint_nudge: false,
@@ -398,6 +400,13 @@ impl HeadlessServer {
         let should_quit = self.should_quit.clone();
         let quit_notify = self.server_event_tx.clone();
         ctrlc_handler(should_quit, quit_notify);
+        let quit_notify = self.server_event_tx.clone();
+        let _host_shutdown = crate::platform::HostShutdownMonitor::start(
+            self.host_shutdown_requested.clone(),
+            move || {
+                let _ = quit_notify.try_send(ServerEvent::QuitSignal);
+            },
+        );
 
         let mut needs_render = true;
         let mut needs_full_render = true;
@@ -412,6 +421,13 @@ impl HeadlessServer {
             if self.shutting_down {
                 self.complete_shutdown().await?;
                 break;
+            }
+
+            // A host shutdown warning precedes process termination. Do not drain pane
+            // deaths here: logind's delay lock stays held until the final session save.
+            if self.host_shutdown_requested.load(Ordering::Acquire) {
+                self.initiate_shutdown();
+                continue;
             }
 
             // Check if we should start shutting down.
@@ -638,7 +654,9 @@ impl HeadlessServer {
                 }
             };
 
-            if self.should_quit.load(Ordering::Acquire) {
+            if self.should_quit.load(Ordering::Acquire)
+                || self.host_shutdown_requested.load(Ordering::Acquire)
+            {
                 match event {
                     LoopEvent::Internal(ev) => {
                         self.handle_internal_event_with_forwarding(ev);
@@ -779,7 +797,7 @@ impl HeadlessServer {
         // rendering semantics. Force one fresh frame to every remaining client
         // even if the next rendered buffer compares equal to its cached frame.
         for client in self.clients.values_mut() {
-            client.request_repaint();
+            client.request_recompute();
         }
         if !start_pending_agent_resumes {
             self.app.pending_agent_resume_deadline = None;
@@ -792,7 +810,7 @@ impl HeadlessServer {
             .start_pending_agent_resumes(self.app.pending_agent_resume_due(now))
         {
             for client in self.clients.values_mut() {
-                client.request_repaint();
+                client.request_recompute();
             }
         }
     }
@@ -856,9 +874,20 @@ impl HeadlessServer {
         let server_keybindings = self.server_keybindings.clone();
         apply_keybindings(&mut self.app, &server_keybindings);
         self.sync_visible_server_config_diagnostic(false);
-        if outer_terminal_focus == Some(true) {
-            self.app.state.mark_active_tab_seen();
-        }
+        // CANDIDATE FIX (#55): do NOT acknowledge completions here.
+        //
+        // This ran on every client-state sync while the outer terminal reported
+        // focus -- an ambient condition, not a user action -- and
+        // mark_active_tab_seen() sets pane.seen = true, which is the same bit that
+        // makes AgentStatus::Done. So a completion latched by
+        // apply_pane_state_change was erased moments later, and every consumer
+        // that re-derives status from live pane state (plugin context via
+        // pane_info, session.snapshot, session_list) read `idle`.
+        //
+        // Acknowledgement should follow an actual user action. The explicit
+        // navigation callers -- handle_pane_focus and focus_agent_target -- still
+        // call mark_active_tab_seen, so looking at a pane still clears it.
+        // Merely having a focused client attached no longer does.
         self.app.set_host_terminal_appearance_state(
             host_terminal_appearance,
             host_terminal_appearance_explicit,
@@ -1969,6 +1998,7 @@ impl HeadlessServer {
                 mouse_capture,
                 surface_active,
                 surface_reuse,
+                surface_delta,
                 writer,
             } => {
                 if self.handoff_in_progress {
@@ -2015,6 +2045,7 @@ impl HeadlessServer {
                 connection.shell_mouse_capture = mouse_capture;
                 connection.shell_surface_active = surface_active;
                 connection.render_state.enable_surface_reuse(surface_reuse);
+                connection.render_state.enable_surface_delta(surface_delta);
                 connection.shell_projection_revision = 1;
                 let config_diagnostic = if endpoint_keybindings {
                     self.server_config_diagnostic.as_deref()

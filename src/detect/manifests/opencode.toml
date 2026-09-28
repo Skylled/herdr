@@ -1,7 +1,7 @@
 id = "opencode"
-version = "2026.06.10.1"
+version = "2026.09.26.1"
 min_engine_version = 1
-updated_at = "2026-06-10T00:00:00Z"
+updated_at = "2026-09-26T00:00:00Z"
 aliases = ["open-code", "herdr:opencode"]
 
 [[rules]]
@@ -21,12 +21,7 @@ state = "working"
 priority = 110
 region = "whole_recent"
 visible_working = true
-any = [
-  { contains = ["esc to interrupt"] },
-  { contains = ["ctrl+c to interrupt"] },
-  { contains = ["press esc to interrupt"] },
-  { line_regex = ['(?i).*opencode.*esc (again to )?interrupt'] },
-]
+regex = ['(?i-u:\b(?:esc|ctrl\+c)(?:\s+again)?(?:\s+to)?\s+interrupt\b)']
 
 [[rules]]
 id = "progress_bar_working"
@@ -35,3 +30,23 @@ priority = 100
 region = "whole_recent"
 visible_working = true
 regex = ['(■|⬝){4,}']
+
+[[rules]]
+id = "live_prompt_box"
+state = "idle"
+priority = 50
+region = "whole_recent"
+visible_idle = true
+# Based on Earshot's 7f165a0, 2026-09-11 splash/post-turn captures.
+# OpenCode CLI version was not recorded. Require an empty
+# editable body (or the first-launch placeholder), mode/model line, bottom
+# border and final command footer. The busy screen draws the same box.
+# Whole detection snapshot vetoes fail closed even above the prompt region.
+regex = ['(?m)^(?:[ \t]*┃(?:[ \t]+Ask anything… "[^"\r\n]+")?[ \t]*\r?\n){2,}[ \t]*┃[ \t]+(?:Build|Plan)[ \t]+·[ \t]+[^\r\n]+\r?\n[ \t]*╹▀{20,}[ \t]*\r?\n[ \t]*[^\r\n]*(?-u:\b)ctrl\+p commands[ \t]*(?:\r?\n[ \t]*)*\z']
+not = [
+  { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
+  { regex = ['(■|⬝){4,}'] },
+  { regex = ['(?i-u:\b(?:esc|ctrl\+c)(?:\s+again)?(?:\s+to)?\s+interrupt\b)'] },
+  { contains = ["△ Permission required"] },
+  { contains = ["esc dismiss"] },
+]

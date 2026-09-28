@@ -1,7 +1,7 @@
 id = "codex"
-version = "2026.09.14.1"
+version = "2026.09.28.1"
 min_engine_version = 3
-updated_at = "2026-09-14T00:00:00Z"
+updated_at = "2026-09-28T00:00:00Z"
 
 [[rules]]
 id = "osc_title_blocked"
@@ -48,8 +48,15 @@ state = "blocked"
 priority = 950
 region = "bottom_non_empty_lines(20)"
 visible_blocker = true
-contains = ["Update available!", "Update now"]
-regex = ['Skip\s+until\s+next\s+version', 'Press enter to continue\s*\z']
+# Codex 0.158 changed the header from "Update available! A -> B" to
+# "Update available · A → B" and the footer from "Press enter to continue" to
+# "enter continue · esc skip". Keep both; the footer must still end the screen.
+contains = ["Update now"]
+regex = [
+  'Update available(?:!|[ \t]+·)',
+  'Skip\s+until\s+next\s+version',
+  '(?:Press enter to continue|(?m:^[ \t]*)enter continue(?: · [^\r\n]*)?)\s*\z',
+]
 
 [[rules]]
 id = "live_strong_blocker"
@@ -84,11 +91,13 @@ state = "working"
 priority = 500
 region = "before_current_prompt_marker"
 visible_working = true
-# Cheap negative filter before the multiline search.
-contains = ["esc to interrupt"]
-# Animations can hide the bullet, and queued inputs can sit below a dynamic activity label.
-# Require the live timer/control suffix with no later response or interruption marker.
-regex = ['(?m)^(?:[•◦][ \t]+)?[^\s›•◦■✗✓─][^\r\n]* \((?:[0-9]+[hm] )*[0-9]+s • esc to interrupt\)(?: · [^\r\n]*)?(?:\r?\n(?:[^•◦›■✗✓─\r\n][^\r\n]*|•[ \t]+(?:Queued\s+follow-up\s+inputs|Messages\s+to\s+be\s+submitted\s+after\s+next\s+tool\s+call(?:\s+\(press\s+esc\s+to\s+interrupt\s+and\s+send\s+immediately\))?|Messages\s+to\s+be\s+submitted\s+at\s+end\s+of\s+turn)|›[⠁⠂⠄⠈⠐⠠⡀⢀][^\r\n]*)?)*\s*\z']
+# Support animated and reduced-motion status, including dynamic activity labels.
+# The interrupt hint can be remapped, unbound, or hidden, and queued inputs can
+# sit below the status. Require the live timer suffix with no later response.
+any = [{ contains = [" to interrupt)"] }, { contains = ["s)"] }]
+regex = ['(?m)^(?:[•◦][ \t]+)?[^\s›•◦■✗✓─][^\r\n]* \((?:[0-9]+[hm] )*[0-9]+s(?: • [^\r\n]+? to interrupt)?\)(?: · [^\r\n]*)?(?:\r?\n(?:[^•◦›■✗✓─\r\n][^\r\n]*|•[ \t]+(?:Queued\s+follow-up\s+inputs|Messages\s+to\s+be\s+submitted\s+after\s+next\s+tool\s+call(?:\s+\(press\s+[^\r\n]+?\s+to\s+interrupt\s+and\s+send\s+immediately\))?|Messages\s+to\s+be\s+submitted\s+at\s+end\s+of\s+turn)|›[⠁⠂⠄⠈⠐⠠⡀⢀][^\r\n]*)?)*\s*\z']
+# A failed reconnect keeps its final elapsed timer but is no longer working.
+not = [{ line_regex = ['^(?:[•◦][ \t]+)?Reconnect failed — check the endpoint, then relaunch \([0-9hms ]+\)$'] }]
 
 [[rules]]
 id = "osc_title_idle"
@@ -100,4 +109,84 @@ regex = ['\S']
 not = [
   { regex = ['(?:^| )[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏](?: |$)'] },
   { contains = ["Action Required"] },
+]
+
+# Archived live Codex 0.156.1 captures (2026-09-25): idle and working
+# screens both retain this empty composer and model/path footer. Veto controls
+# across the detection snapshot; stale controls can conservatively refuse idle.
+# The higher-priority guards also prevent the retained OSC idle rule from
+# bypassing these vetoes while this composer is visible.
+
+[[rules]]
+id = "live_prompt_blocked"
+state = "blocked"
+priority = 650
+region = "whole_recent"
+visible_blocker = true
+all = [{ regex = ['(?m)^›(?:[ \t]+|[\u2800-\u28FF])[ \t]*Ask Codex to do anything[ \t]*\r?$'] }]
+any = [
+  { contains = ["enter to submit"] },
+  { contains = ["press enter to confirm"] },
+  { contains = ["esc to cancel"] },
+  { contains = ["enter to select"] },
+  { contains = ["allow command?"] },
+  { contains = ["do you want to"] },
+  { contains = ["would you like to"] },
+  { contains = ["[y/n]"] },
+  { contains = ["yes (y)"] },
+  { contains = ["waiting for permission"] },
+  { contains = ["action required"] },
+  { contains = ["do you trust the contents of this directory?"] },
+  { contains = ["update available!"] },
+  { contains = ["press enter to continue"] },
+  { contains = ["esc dismiss"] },
+  { contains = ["q to quit"] },
+  { regex = ['(?mi-u:^[ \t]*Question[ \t]+[0-9]+(?:[ \t]*/[ \t]*[0-9]+|[ \t]+of[ \t]+[0-9]+)(?:[ \t:]|$))'] },
+]
+
+[[rules]]
+id = "live_prompt_busy"
+state = "working"
+priority = 450
+region = "whole_recent"
+visible_working = true
+all = [{ regex = ['(?m)^›(?:[ \t]+|[\u2800-\u28FF])[ \t]*Ask Codex to do anything[ \t]*\r?$'] }]
+any = [
+  { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
+  { regex = ['(■|⬝){4,}'] },
+  { regex = ['(?i-u:\b(?:esc|ctrl\+c)(?:\s+again)?(?:\s+to)?\s+interrupt\b|\bto\s+interrupt\b)'] },
+  { regex = ['(?m)^[ \t]*(?:[•◦][ \t]+)?[^ \t\r\n›•◦■✗✓─][^\r\n]* \((?:[0-9]+[hm] )*[0-9]+s(?:[^\r\n]*)?\)[^\r\n]*$'] },
+  { regex = ['(?i-u:Queued\s+follow-up\s+inputs|Messages\s+to\s+be\s+submitted\s+(?:after\s+next\s+tool\s+call|at\s+end\s+of\s+turn)|edit\s+last\s+queued\s+message)'] },
+]
+
+[[rules]]
+id = "live_prompt_box"
+state = "idle"
+priority = 200
+region = "whole_recent"
+visible_idle = true
+regex = ['(?m)^›[ \t]+Ask Codex to do anything[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]{2,}[^›\r\n]+ · [^›\r\n]+(?:\r?\n[ \t]*)*\z']
+not = [
+  { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
+  { regex = ['(■|⬝){4,}'] },
+  { regex = ['(?i-u:\b(?:esc|ctrl\+c)(?:\s+again)?(?:\s+to)?\s+interrupt\b|\bto\s+interrupt\b)'] },
+  { regex = ['(?m)^[ \t]*(?:[•◦][ \t]+)?[^ \t\r\n›•◦■✗✓─][^\r\n]* \((?:[0-9]+[hm] )*[0-9]+s(?:[^\r\n]*)?\)[^\r\n]*$'] },
+  { regex = ['(?i-u:Queued\s+follow-up\s+inputs|Messages\s+to\s+be\s+submitted\s+(?:after\s+next\s+tool\s+call|at\s+end\s+of\s+turn)|edit\s+last\s+queued\s+message)'] },
+  { contains = ["enter to submit"] },
+  { contains = ["press enter to confirm"] },
+  { contains = ["esc to cancel"] },
+  { contains = ["enter to select"] },
+  { contains = ["allow command?"] },
+  { contains = ["do you want to"] },
+  { contains = ["would you like to"] },
+  { contains = ["[y/n]"] },
+  { contains = ["yes (y)"] },
+  { contains = ["waiting for permission"] },
+  { contains = ["action required"] },
+  { contains = ["do you trust the contents of this directory?"] },
+  { contains = ["update available!"] },
+  { contains = ["press enter to continue"] },
+  { contains = ["esc dismiss"] },
+  { contains = ["q to quit"] },
+  { regex = ['(?mi-u:^[ \t]*Question[ \t]+[0-9]+(?:[ \t]*/[ \t]*[0-9]+|[ \t]+of[ \t]+[0-9]+)(?:[ \t:]|$))'] },
 ]
