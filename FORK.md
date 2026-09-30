@@ -342,7 +342,9 @@ to Earshot and produces an unnecessary Pocket Ace session card.
 A higher-priority screen rule requires a live elapsed-time status followed by
 the queued-input section and a collapsed question count, with no later response
 marker. It permits remapped or absent answer/interrupt hints. Real permission
-and synchronous question controls veto the exception; an unanswered question
+and synchronous question controls veto the exception (including the approval
+strings `would you like to`, `do you want to`, `[y/n]`, `yes (y)`, `yes, proceed`,
+`esc to cancel`, `enter to select`, `enter to submit`); an unanswered question
 without that live working evidence retains normal blocked detection.
 
 Rendering checked against the installed CLI's source tag `rust-v0.159.0`, commit

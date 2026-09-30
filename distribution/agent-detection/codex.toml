@@ -20,6 +20,17 @@ not = [
   { contains = ["enter to submit answer"] },
   { contains = ["enter to submit all"] },
   { contains = ["allow command?"] },
+  # Approval/permission dialogs (the strings live_prompt_blocked and weak_blocker
+  # already treat as blockers). A dialog must never read as working.
+  { contains = ["would you like to"] },
+  { contains = ["do you want to"] },
+  { contains = ["[y/n]"] },
+  { contains = ["yes (y)"] },
+  { contains = ["yes, proceed"] },
+  { contains = ["waiting for permission"] },
+  { contains = ["esc to cancel"] },
+  { contains = ["enter to select"] },
+  { contains = ["enter to submit"] },
 ]
 
 [[rules]]

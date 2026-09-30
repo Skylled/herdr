@@ -64,6 +64,39 @@ fn codex_queued_question_working_fixture() {
             ),
             fixture.replace("    shift+← to answer", "    enter to submit answer"),
             fixture.replace("    shift+← to answer", "    allow command?"),
+            // Approval dialogs drawn under a still-visible status and queue.
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nWould you like to run the following command?",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nWould you like to make the following edits?",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\n  Do you want to approve network access to example.com?",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nProceed? [y/n]",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\n  1. Yes, proceed (y)",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nWaiting for permission",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nesc to cancel",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nenter to select",
+            ),
         ] {
             let result = evaluate_loaded_manifest(
                 Agent::Codex,
