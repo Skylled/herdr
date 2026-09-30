@@ -1,5 +1,120 @@
 use super::*;
 
+// Quest Log #239 explicitly requests a screen fixture for this fork regression.
+// Exercise both shipping copies with OSC titles: screen text alone misses the bug.
+#[test]
+fn codex_queued_question_working_fixture() {
+    let fixture = include_str!("../fixtures/codex-queued-question-working.txt");
+    for content in [
+        include_str!("../manifests/codex.toml"),
+        include_str!("../../../distribution/agent-detection/codex.toml"),
+    ] {
+        let loaded = loaded_manifest(
+            parse_manifest(content).unwrap(),
+            ManifestSource::Bundled,
+            None,
+            None,
+            false,
+        )
+        .unwrap();
+        for screen in [
+            fixture.to_string(),
+            fixture.replace('\n', "\r\n"),
+            fixture.replace("? 1 question", "? 2 questions · 30s"),
+            fixture.replace("shift+← to answer", "alt+↑ to answer"),
+            fixture.replace("    shift+← to answer\n", ""),
+            fixture.replace("Working", "Thinking"),
+            fixture.replace(" • esc to interrupt", ""),
+        ] {
+            for title in [
+                "",
+                "Queued question | herdr",
+                "⠋ Queued question | herdr",
+                "[ ! ] Action Required | herdr",
+                "[ . ] Action Required | herdr",
+            ] {
+                let result = evaluate_loaded_manifest(
+                    Agent::Codex,
+                    DetectionInput {
+                        screen: &screen,
+                        osc_title: title,
+                        osc_progress: "",
+                    },
+                    loaded.clone(),
+                    false,
+                );
+                assert_eq!(result.state, AgentState::Working, "{screen:?}, {title:?}");
+                assert!(result.visible_working);
+                assert!(!result.visible_blocker);
+            }
+        }
+        // Without live working evidence, an Action Required title remains blocked.
+        // Real modal controls and later response markers must not be overridden.
+        for screen in [
+            fixture.replace("• Working (1m 13s • esc to interrupt)\n", ""),
+            fixture.replace("  ? 1 question\n", ""),
+            fixture.replace(
+                "Working (1m 13s • esc to interrupt)",
+                "Reconnect failed — check the endpoint, then relaunch (1m 13s)",
+            ),
+            fixture.replace("› Ask Codex", "• Finished\n› Ask Codex"),
+            fixture.replace(
+                "    shift+← to answer",
+                "    press enter to confirm or esc to cancel",
+            ),
+            fixture.replace("    shift+← to answer", "    enter to submit answer"),
+            fixture.replace("    shift+← to answer", "    allow command?"),
+            // Approval dialogs drawn under a still-visible status and queue.
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nWould you like to run the following command?",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nWould you like to make the following edits?",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\n  Do you want to approve network access to example.com?",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nProceed? [y/n]",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\n  1. Yes, proceed (y)",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nWaiting for permission",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nesc to cancel",
+            ),
+            fixture.replace(
+                "    shift+← to answer",
+                "    shift+← to answer\nenter to select",
+            ),
+        ] {
+            let result = evaluate_loaded_manifest(
+                Agent::Codex,
+                DetectionInput {
+                    screen: &screen,
+                    osc_title: "[ ! ] Action Required | herdr",
+                    osc_progress: "",
+                },
+                loaded.clone(),
+                false,
+            );
+            assert_eq!(result.state, AgentState::Blocked, "{screen:?}");
+            assert!(result.visible_blocker);
+            assert!(!result.visible_working);
+        }
+    }
+}
+
 // Codex is only a registry key here; behavior tests supply synthetic rules.
 fn remote_manifest(version: &str, state: &str, contains: &str) -> String {
     format!(

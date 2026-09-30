@@ -1,7 +1,37 @@
 id = "codex"
-version = "2026.09.28.1"
+version = "2026.09.30.1"
 min_engine_version = 3
-updated_at = "2026-09-28T00:00:00Z"
+updated_at = "2026-09-30T00:00:00Z"
+
+[[rules]]
+id = "queued_question_working"
+state = "working"
+priority = 1150
+region = "before_current_prompt_marker"
+visible_working = true
+# Codex 0.159.0 sets Action Required for unanswered async questions even while
+# its turn continues. Only a live timer + queued section + collapsed question
+# count overrides that title; later response markers and real dialogs veto it.
+# Navigation bindings are optional and configurable, so do not require them.
+regex = ['(?m)^(?:[•◦][ \t]+)?[^\s›•◦■✗✓─][^\r\n]* \((?:[0-9]+[hm] )*[0-9]+s(?: • [^\r\n]+? to interrupt)?\)(?: · [^\r\n]*)?\r?\n(?:[^•◦›■✗✓─\r\n][^\r\n]*\r?\n|\r?\n)*•[ \t]+Queued follow-up inputs\r?\n(?:[^•◦›■✗✓─\r\n][^\r\n]*\r?\n|\r?\n)*[ \t]*\? [0-9]+ questions?(?: · [^\r\n]*)?(?:\r?\n(?:[^•◦›■✗✓─\r\n][^\r\n]*)?)*\s*\z']
+not = [
+  { line_regex = ['^(?:[•◦][ \t]+)?Reconnect failed — check the endpoint, then relaunch \([0-9hms ]+\)$'] },
+  { contains = ["press enter to confirm"] },
+  { contains = ["enter to submit answer"] },
+  { contains = ["enter to submit all"] },
+  { contains = ["allow command?"] },
+  # Approval/permission dialogs (the strings live_prompt_blocked and weak_blocker
+  # already treat as blockers). A dialog must never read as working.
+  { contains = ["would you like to"] },
+  { contains = ["do you want to"] },
+  { contains = ["[y/n]"] },
+  { contains = ["yes (y)"] },
+  { contains = ["yes, proceed"] },
+  { contains = ["waiting for permission"] },
+  { contains = ["esc to cancel"] },
+  { contains = ["enter to select"] },
+  { contains = ["enter to submit"] },
+]
 
 [[rules]]
 id = "osc_title_blocked"
