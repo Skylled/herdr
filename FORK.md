@@ -29,10 +29,11 @@ Last audited **2026-09-26**, against `codex/rebase-upstream-2026-09-21` at
 | 7 | `+fork.N` version label | #86 | yes, `c345b7c0` + bumps | yes | no |
 | 8 | Synthetic blocker-gate engine tests | #104 | yes, `9136cc19` | yes (tests only) | no |
 | 9 | Codex 0.158 startup update chooser | #201 | branch `fix/codex-startup-update-201` | **no** (and shadowed by the VM override) | bug report |
+| 10 | Codex queued questions during Working | #239 | no, `fix/codex-queued-question` | no | bug report |
 
-Nine entries: seven behavioural fixes (1, 2, 3, 5, 6, 9, and the superseded 4),
+Ten entries: eight behavioural fixes (1, 2, 3, 5, 6, 9, 10, and the superseded 4),
 one fork-identity feature (7), one test-only commit (8). **Seven are on the build
-branch; patches 4 and 9 are not.**
+branch; patches 4, 9 and 10 are not.**
 
 ## Why a file date is not evidence
 
@@ -325,6 +326,62 @@ footer alternative.
   manifest, so installing a build is not enough: the override's `startup_update`
   needs the same edit, followed by `herdr server reload-agent-manifests`.
 - **Upstream:** bug report (upstream's `startup_update` has the same literals).
+
+### 10. Codex queued questions during Working — Quest Log #239
+
+Branch `fix/codex-queued-question`, based on the fetched build branch
+`origin/codex/rebase-upstream-2026-09-21` at `76a0da21` (2026-09-30).
+Bundled and published Codex manifests move together to `2026.09.30.1`.
+
+Codex 0.159.0 marks its OSC title `Action Required` whenever an async question
+is unanswered, even while its screen still shows `Working (1m 13s • esc to interrupt)` with
+`Queued follow-up inputs`, `? 1 question`, and `shift+← to answer`. The existing
+OSC blocker outranks all screen-working rules. This emits a false blocked state
+to Earshot and produces an unnecessary Pocket Ace session card.
+
+A higher-priority screen rule requires a live elapsed-time status followed by
+the queued-input section and a collapsed question count, with no later response
+marker. It permits remapped or absent answer/interrupt hints. Real permission
+and synchronous question controls veto the exception; an unanswered question
+without that live working evidence retains normal blocked detection.
+
+Rendering checked against the installed CLI's source tag `rust-v0.159.0`, commit
+`687a119f0fcaace47e1f1abcc77cec6c813fd6da`: `bottom_pane/questions.rs` renders
+the collapsed count independently of task status; `terminal_title_requires_action`
+in `bottom_pane/mod.rs` includes every unanswered async question. Turn completion
+and failure recover drafts and clear pending questions (`chatwidget/protocol.rs`,
+`bottom_pane/async_questions/state.rs`), so a normal completed turn does not leave
+an idle unanswered async-question queue. Synchronous request-user-input dialogs
+remain blockers.
+
+The requested fork fixture lives in `src/detect/fixtures/` and tests both manifest
+copies against empty, static, spinner, and both blinking Action Required titles.
+It checks CRLF, plural counts/countdowns, remapped/absent hints, dynamic activity
+labels, stale status, and genuine blockers. This is the explicit #239 exception
+to upstream's synthetic-only screen-test convention. No live question was issued.
+
+Validation: the fixture failed before the change with `Blocked` for the Action
+Required title, then passed with the new rules. All 97 detection tests, 13
+manifest-validator tests, catalog validation, formatting, and Clippy passed.
+`just maintenance-test` also passed (144 Python tests and 5 Bun tests).
+`just check` stopped at the existing `ping_over_socket_returns_version` assertion:
+it expects the package version `0.9.1`, while this fork reports `0.9.1+fork.4`.
+Neither the ping test nor version code changed in this patch; the full suite
+and later check stages were not completed.
+
+- **On build branch:** no; local fix branch only, not pushed or installed.
+- **Upstream searched:** fetched `upstream/master` at `331775c3`; reviewed Codex
+  manifest and detection history since `5a649142`, including #4495 and #4563.
+  Neither fixes the queued-question OSC title precedence.
+- **Deployment:** integrate the local commit into the build branch, build with
+  Zig 0.16 (`cargo build --release --locked`), and follow Installing below.
+  Bump the next installed fork build and record its source/digests separately.
+  This VM's existing local `codex.toml` override still shadows bundled/remote
+  rules; Kyle must deliberately update it to this manifest or retire it before
+  the change can take effect. It was left untouched by this patch.
+- **Restart:** Kyle performs `groundctl stop herdr` then `groundctl start herdr`;
+  replacing the binary alone does not change the running server.
+- **Upstream:** a reproducible bug report may be appropriate; no upstream PR.
 
 ## Installed
 
