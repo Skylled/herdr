@@ -115,6 +115,170 @@ fn codex_queued_question_working_fixture() {
     }
 }
 
+// Quest Log QL-283 explicitly requests agy screen fixtures for this fork
+// regression: agy 1.2.14 draws a footer under its prompt box, which the
+// anchored idle rule did not allow. Captures are real; account emails are
+// replaced with user@example.com.
+fn agy_manifests() -> Vec<LoadedManifest> {
+    [
+        include_str!("../manifests/antigravity.toml"),
+        include_str!("../../../distribution/agent-detection/antigravity.toml"),
+    ]
+    .into_iter()
+    .map(|content| {
+        loaded_manifest(
+            parse_manifest(content).unwrap(),
+            ManifestSource::Bundled,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+    })
+    .collect()
+}
+
+fn explain_agy(loaded: &LoadedManifest, screen: &str) -> DetectionExplain {
+    evaluate_loaded_manifest(
+        Agent::Antigravity,
+        DetectionInput {
+            screen,
+            osc_title: "",
+            osc_progress: "",
+        },
+        loaded.clone(),
+        false,
+    )
+}
+
+const AGY_1_2_14_IDLE: &str = include_str!("../fixtures/agy-1.2.14-idle.txt");
+const AGY_1_2_14_FOOTER: &str =
+    "? for shortcuts                                                       Gemini 3.8 Flash · high";
+
+// QL-22's caveat: a looser idle rule must never call an approval dialog idle.
+// The permission capture is from 2026-09-12 (agy 1.2.5 wording, see the Q22
+// report); the trust dialog is a 1.2.14 capture. The changelog shipped inside
+// agy 1.2.14 says approval prompts now name the action, "for example `Run this
+// command?`, `Allow access to this URL?`, or `Allow calling this tool?`", so
+// those titles are vetoed too, including when drawn above a live prompt box.
+#[test]
+fn agy_approval_dialogs_are_never_idle() {
+    let permission = include_str!("../fixtures/agy-permission-run-command.txt");
+    let trust = include_str!("../fixtures/agy-1.2.14-trust-dialog.txt");
+    let box_and_footer = AGY_1_2_14_IDLE
+        .split_once("\n\n─")
+        .map(|(_, rest)| format!("─{rest}"))
+        .unwrap();
+    let dialogs = [
+        "Allow access to this URL?\n> 1. Yes, allow access\n  2. No, deny access\n\n  ↑/↓ Navigate · enter Confirm\n",
+        "Allow calling this tool?\n> 1. Yes, allow tool call\n  2. No, cancel\n",
+        "Approve this action?\n> 1. Yes, allow tool call\n  2. No, cancel\n",
+        "Send input to this task?\n> 1. Yes, send input\n  2. No, cancel\n",
+        "Do you want to proceed?\n> 1. Yes, accept this change\n  2. No, cancel\n",
+        "Run this command?\n> 1. Yes, run command\n  2. No, cancel\n",
+        "  ↑/↓ Navigate · enter Confirm\n",
+    ];
+    for loaded in agy_manifests() {
+        for screen in [
+            permission.to_string(),
+            permission.replace('\n', "\r\n"),
+            format!("{permission}\n{box_and_footer}"),
+            trust.to_string(),
+            trust.replace('\n', "\r\n"),
+            format!("{trust}\n{box_and_footer}"),
+        ] {
+            let result = explain_agy(&loaded, &screen);
+            assert_eq!(result.state, AgentState::Blocked, "{screen:?}");
+            assert!(result.visible_blocker, "{screen:?}");
+            assert!(!result.visible_idle, "{screen:?}");
+        }
+        for dialog in dialogs {
+            for screen in [
+                AGY_1_2_14_IDLE.replace("\n\n─", &format!("\n\n{dialog}\n─")),
+                AGY_1_2_14_IDLE.replace(
+                    "\n\n─",
+                    &format!("\n\n{dialog}{}\n─", "output\n".repeat(20)),
+                ),
+                format!("{dialog}\n{box_and_footer}"),
+            ] {
+                let result = explain_agy(&loaded, &screen);
+                assert!(!result.visible_idle, "{screen:?}");
+                assert_ne!(
+                    result.matched_rule.map(|rule| rule.state),
+                    Some(AgentState::Idle),
+                    "{screen:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn agy_prompt_box_is_idle_with_and_without_the_1_2_14_footer() {
+    let older = include_str!("../fixtures/agy-1.2.1-idle.txt");
+    for loaded in agy_manifests() {
+        for screen in [
+            AGY_1_2_14_IDLE.to_string(),
+            AGY_1_2_14_IDLE.replace('\n', "\r\n"),
+            format!("{AGY_1_2_14_IDLE}\n\n"),
+            format!("  40. Forty is the last number.\n\n{AGY_1_2_14_IDLE}"),
+            AGY_1_2_14_IDLE.replace("Gemini 3.8 Flash · high", "Gemini 3.5 Pro · low"),
+            AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, "? for shortcuts"),
+            AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, "  ? for shortcuts  "),
+            older.to_string(),
+            older.replace('\n', "\r\n"),
+        ] {
+            let result = explain_agy(&loaded, &screen);
+            assert_eq!(result.state, AgentState::Idle, "{screen:?}");
+            assert!(result.visible_idle, "{screen:?}");
+            assert!(result.fallback_reason.is_none(), "{screen:?}");
+        }
+        // Anything the rule cannot vouch for falls back rather than reading idle.
+        for screen in [
+            AGY_1_2_14_IDLE.replace("\n>\n", "\n> half a thought\n"),
+            AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, "esc to cancel"),
+            AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, "Gemini 3.8 Flash · high"),
+            AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, "x ? for shortcuts"),
+            format!("{AGY_1_2_14_IDLE}later output"),
+            format!("{AGY_1_2_14_IDLE}{AGY_1_2_14_FOOTER}"),
+            AGY_1_2_14_IDLE.replace('─', "═"),
+            AGY_1_2_14_IDLE.replace("\n>\n", "\n❯\n"),
+        ] {
+            let result = explain_agy(&loaded, &screen);
+            assert!(!result.visible_idle, "{screen:?}");
+            assert!(result.matched_rule.is_none(), "{screen:?}");
+        }
+    }
+}
+
+// The working capture is agy 1.2.1 from Earshot's prompt-signature fixtures
+// (2026-09-11). agy keeps drawing the prompt box mid-turn, so the 1.2.14
+// variants put the same spinner above the box and footer.
+#[test]
+fn agy_turn_in_progress_is_working_not_idle() {
+    let older = include_str!("../fixtures/agy-1.2.1-working.txt");
+    for loaded in agy_manifests() {
+        for screen in [
+            older.to_string(),
+            older.replace('\n', "\r\n"),
+            AGY_1_2_14_IDLE.replace("\n\n─", "\n\n⣻  Generating...\n─"),
+            AGY_1_2_14_IDLE.replace(
+                "\n\n─",
+                &format!("\n\n⠋  Thinking...\n{}─", "output\n".repeat(20)),
+            ),
+        ] {
+            let result = explain_agy(&loaded, &screen);
+            assert_eq!(result.state, AgentState::Working, "{screen:?}");
+            assert!(result.visible_working, "{screen:?}");
+            assert!(!result.visible_idle, "{screen:?}");
+        }
+        for footer in ["esc to interrupt", "? for shortcuts · esc to interrupt"] {
+            let screen = AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, footer);
+            assert!(!explain_agy(&loaded, &screen).visible_idle, "{screen:?}");
+        }
+    }
+}
+
 // Codex is only a registry key here; behavior tests supply synthetic rules.
 fn remote_manifest(version: &str, state: &str, contains: &str) -> String {
     format!(

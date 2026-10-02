@@ -1,7 +1,7 @@
 id = "agy"
-version = "2026.09.26.1"
+version = "2026.10.02.1"
 min_engine_version = 1
-updated_at = "2026-09-26T00:00:00Z"
+updated_at = "2026-10-02T00:00:00Z"
 aliases = ["antigravity", "antigravity-cli"]
 
 [[rules]]
@@ -56,22 +56,38 @@ state = "idle"
 priority = 50
 region = "whole_recent"
 visible_idle = true
-# Based on agy 1.2.1 captures in Earshot (7f165a0, 2026-09-11).
+# Based on agy 1.2.1 captures in Earshot (7f165a0, 2026-09-11) and an agy
+# 1.2.14 capture (2026-10-02, QL-283).
 # agy's prompt box: an empty prompt line (">") framed by two horizontal rules
-# (at least 20 box-drawing characters). The rule is anchored to the foot of
-# the region (\z) so text typed below the box or prose containing rules cannot
-# match. Mid-turn screens keep drawing the prompt box, so the not-gates veto
-# active spinners, interrupt hints, background tasks, and blocked dialogs.
+# (at least 20 box-drawing characters). agy 1.2.14 adds one status line under
+# the box, starting "? for shortcuts" and ending with the model; older versions
+# end at the bottom rule. The rule is anchored to the foot of the region (\z)
+# and allows only that one footer line, so text typed below the box, any other
+# footer, or prose containing rules cannot match. Mid-turn screens keep drawing
+# the prompt box, so the not-gates veto active spinners, interrupt and cancel
+# hints, background tasks, and approval dialogs. agy 1.2.14's changelog names
+# its approval titles ("Run this command?", "Allow access to this URL?",
+# "Allow calling this tool?"); their option labels are vetoed as well.
 # Use the detection snapshot so vetoes above the last ten lines still apply.
-regex = ['(?m)^[ \t]*─{20,}[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*>[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*─{20,}[ \t]*(?:\r?\n[ \t]*)*\z']
+regex = ['(?m)^[ \t]*─{20,}[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*>[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*─{20,}[ \t]*(?:\r?\n[ \t]*\?[ \t]+for shortcuts\b[^\r\n]*)?(?:\r?\n[ \t]*)*\z']
 not = [
   { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
   { regex = ['(?i-u:\b(?:esc|ctrl\+c)(?:\s+again)?(?:\s+to)?\s+interrupt\b)'] },
+  { regex = ['(?i)\besc\s+to\s+cancel\b'] },
   { regex = ['(?i)·\s*[1-9][0-9]*\s+task'] },
   { contains = ["requesting permission for:"] },
   { contains = ["run this command?"] },
+  { contains = ["allow access to this url?"] },
+  { contains = ["allow calling this tool?"] },
+  { contains = ["approve this action?"] },
+  { contains = ["send input to this task?"] },
   { contains = ["do you want to proceed?"] },
+  { contains = ["yes, allow"] },
+  { contains = ["yes, accept this change"] },
+  { contains = ["yes, send input"] },
+  { contains = ["no, deny"] },
   { contains = ["tab amend"] },
+  { contains = ["enter confirm"] },
   { contains = ["do you trust the contents of this project?"] },
   { contains = ["yes, i trust this folder"] },
 ]
