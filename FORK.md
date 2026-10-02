@@ -30,10 +30,12 @@ Last audited **2026-09-26**, against `codex/rebase-upstream-2026-09-21` at
 | 8 | Synthetic blocker-gate engine tests | #104 | yes, `9136cc19` | yes (tests only) | no |
 | 9 | Codex 0.158 startup update chooser | #201 | branch `fix/codex-startup-update-201` | **no** (and shadowed by the VM override) | bug report |
 | 10 | Codex queued questions during Working | #239 | no, `fix/codex-queued-question` | no | bug report |
+| 11 | agy 1.2.14 prompt-box footer idle rule | QL-283 | no, `feat/agy-idle-1-2-14` | no | bug report |
 
-Ten entries: eight behavioural fixes (1, 2, 3, 5, 6, 9, 10, and the superseded 4),
-one fork-identity feature (7), one test-only commit (8). **Seven are on the build
-branch; patches 4, 9 and 10 are not.**
+Eleven entries: nine behavioural fixes (1, 2, 3, 5, 6, 9, 10, 11, and the
+superseded 4), one fork-identity feature (7), one test-only commit (8). **Seven
+are on the build branch; patches 4, 9, 10 and 11 are not.** (Patches 9 and 10
+have since been merged to `origin/master` via fork PRs 3 and 4.)
 
 ## Why a file date is not evidence
 
@@ -384,6 +386,63 @@ and later check stages were not completed.
 - **Restart:** Kyle performs `groundctl stop herdr` then `groundctl start herdr`;
   replacing the binary alone does not change the running server.
 - **Upstream:** a reproducible bug report may be appropriate; no upstream PR.
+
+### 11. agy 1.2.14 prompt-box footer reads as unknown — QL-283
+
+Branch `feat/agy-idle-1-2-14`, based on `origin/master` at `6caa9cd0`
+(2026-10-02). `origin/master` now contains the whole build branch
+(`origin/codex/rebase-upstream-2026-09-21` at `76a0da21`) plus fork PRs 3 and 4,
+so it is no longer the stale mirror the Base table describes, and fork PRs
+target it. Bundled and published agy manifests move together to `2026.10.02.1`.
+
+Antigravity CLI 1.2.14 draws a status line under the prompt box:
+`? for shortcuts` at the left, the model (`Gemini 3.8 Flash · high`) at the
+right. `live_prompt_box` (patch 6) was anchored with `\z` to the bottom rule,
+so the 1.2.14 idle screen matched nothing and fell back to
+`default_known_agent_idle_fallback`. Earshot then reported agy panes as
+`unclassified-screen` and refused to brief them. The rule now allows at most
+one footer line, and only one starting `? for shortcuts`. Older screens that
+end at the rule still match. Any other footer, typed prompt text, or output
+below the box still falls back.
+
+The looser anchor carries more vetoes (QL-22's caveat). The changelog
+shipped inside the 1.2.14 binary says approval prompts now name the action,
+"for example `Run this command?`, `Allow access to this URL?`, or `Allow
+calling this tool?`". Those titles, `Approve this action?`, `Send input to this
+task?`, their option labels (`yes, allow`, `no, deny`, `yes, accept this
+change`, `yes, send input`), the dialog hint `enter confirm`, and `esc to
+cancel` now veto idle. They veto idle anywhere in the detection snapshot, even
+when a dialog is drawn above a live prompt box.
+
+Evidence. Real captures, with the account email replaced by `user@example.com`:
+- the 1.2.14 idle screen and 1.2.14 trust dialog, read 2026-10-02 from a
+  throwaway named session (`herdr agent read --source detection`) with no
+  prompt sent;
+- the permission dialog from the Q22 report (2026-09-12);
+- agy 1.2.1 idle and working screens from Earshot's prompt-signature fixtures.
+
+On the 1.2.14 idle capture, the installed fork.4 server reported
+`default_known_agent_idle_fallback` with every rule unmatched. The debug build's
+`agent explain --file` reports `live_prompt_box`, `visible_idle: true`, and
+still reports the trust dialog as `folder_trust_dialog` / blocked. These
+fixtures in `src/detect/fixtures/` are QL-283's explicit exception to
+upstream's synthetic-only screen-test convention, as with patch 10.
+
+Gaps. No 1.2.14 working screen or approval dialog was captured, because that
+would mean running a turn on Kyle's quota. The 1.2.14 working cases are the
+1.2.1 spinner placed above the 1.2.14 box. The URL, tool and action dialog cases
+are synthetic, built from the changelog's titles and the binary's option
+strings. Those dialogs may still have no *blocked* rule. If
+`permission_prompt` does not match them, they fall back to unknown idle
+(`visible_idle: false`), which Earshot does not brief. They never read as
+visible idle.
+
+- **On build branch:** no; `feat/agy-idle-1-2-14`.
+- **Installed:** no. Deploying is Kyle's call. This VM has no local `agy.toml`
+  override, and its cached remote `agy.toml` is `2026.06.24.1`, which is
+  older, so a build of this branch serves the new rule with no override work.
+- **Not verified live:** no server serving this rule has read a real agy pane.
+- **Upstream:** bug report, same reasoning as patches 5 and 6.
 
 ## Installed
 
