@@ -16,7 +16,8 @@ change — that is the whole point of it.
 Last audited **2026-09-26**, against `codex/rebase-upstream-2026-09-21` at
 `9136cc19`, on the VM (`Kyles-Virtual-Machine`). Install and supervision
 sections revised **2026-10-02** for the guest-era setup and the `fork.5`
-install (QL-283), on branch `build/fork-5-ql-283`.
+install (QL-283). `fork.5` was installed on the guest the same day and verified
+live; QL-283 is closed.
 
 ## At a glance
 
@@ -30,9 +31,9 @@ install (QL-283), on branch `build/fork-5-ql-283`.
 | 6 | agy prompt box idle rule | #104 | yes, `90095251` | yes, live | bug report |
 | 7 | `+fork.N` version label | #86 | yes, `c345b7c0` + bumps | yes | no |
 | 8 | Synthetic blocker-gate engine tests | #104 | yes, `9136cc19` | yes (tests only) | no |
-| 9 | Codex 0.158 startup update chooser | #201 | `origin/master` (fork PR 3) | in `fork.5`, pending install; shadowed by the VM codex override | bug report |
-| 10 | Codex queued questions during Working | #239 | `origin/master` (fork PR 4) | in `fork.5`, pending install; shadowed by the VM codex override | bug report |
-| 11 | agy 1.2.14 prompt-box footer idle rule | QL-283 | `origin/master` (fork PR 5) | in `fork.5`, pending install | bug report |
+| 9 | Codex 0.158 startup update chooser | #201 | `origin/master` (fork PR 3) | in `fork.5`, installed; shadowed by the VM codex override | bug report |
+| 10 | Codex queued questions during Working | #239 | `origin/master` (fork PR 4) | in `fork.5`, installed; shadowed by the VM codex override | bug report |
+| 11 | agy 1.2.14 prompt-box footer idle rule | QL-283 | `origin/master` (fork PR 5) | yes, `fork.5`, live | bug report |
 
 Eleven entries: nine behavioural fixes (1, 2, 3, 5, 6, 9, 10, 11, and the
 superseded 4), one fork-identity feature (7), one test-only commit (8). The
@@ -442,11 +443,14 @@ strings. Those dialogs may still have no *blocked* rule. If
 (`visible_idle: false`), which Earshot does not brief. They never read as
 visible idle.
 
-- **On build branch:** no; `feat/agy-idle-1-2-14`.
-- **Installed:** no. Deploying is Kyle's call. This VM has no local `agy.toml`
-  override, and its cached remote `agy.toml` is `2026.06.24.1`, which is
-  older, so a build of this branch serves the new rule with no override work.
-- **Not verified live:** no server serving this rule has read a real agy pane.
+- **On build branch:** yes; merged to `origin/master` as fork PR 5 (`8da755fc`).
+- **Installed:** yes, in `fork.5` on the guest, 2026-10-02 (see
+  [Installed](#installed)). This VM has no local `agy.toml` override, and its
+  cached remote `agy.toml` is `2026.06.24.1`, which is older, so the bundled
+  rule serves with no override work.
+- **Verified live, 2026-10-02:** with the server reporting `0.9.1+fork.5`, a
+  fresh agy 1.2.14 session read as answerable at its prompt, then as blocked on
+  a permission prompt. Both correct.
 - **Upstream:** bug report, same reasoning as patches 5 and 6.
 
 ## Installed
@@ -472,11 +476,13 @@ How the guest's server runs:
 | Sockets | `/Users/kyle/.config/herdr/herdr.sock` (API), `herdr-client.sock` |
 | Not | `groundctl`: it does not exist on the guest. It manages the host's services only |
 
-### Pending: `0.9.1+fork.5` on the guest (QL-283), prepared 2026-10-02
+### Current: `0.9.1+fork.5` on the guest (QL-283), installed 2026-10-02
 
-Not yet installed. Kyle performs the install. The step-by-step is in
-`/Users/kyle/Repos/herdr-install-steps.md` on the guest. Fill the TBD cells
-afterwards from `/Users/kyle/Repos/herdr-install-digests-2026-10-02.txt`.
+Kyle installed it on 2026-10-02 and it is live. QL-283 is closed. The prepared
+step-by-step is `/Users/kyle/Repos/herdr-install-steps.md` on the guest. Its
+step 3 log (`herdr-install-digests-2026-10-02.txt`) was not written, so the
+digests below were taken afterwards, read-only, with `shasum -a 256` and
+`shasum -a 1` on the files themselves (2026-10-02, after the install).
 
 | | |
 |---|---|
@@ -485,11 +491,16 @@ afterwards from `/Users/kyle/Repos/herdr-install-digests-2026-10-02.txt`.
 | Build | `cargo build --release --locked`, Zig 0.16.0, in `/Users/kyle/Repos/herdr-worktrees/ql-283-fork-5` |
 | SHA-256 (build output) | `e338d2ce262b37e8c6ded2ee0d239822e88a9576d9af8b22aaee732b90257ad5` |
 | SHA-1 (build output) | `6f0c34941b099d2660e605ca695759d108162cc6` |
-| SHA-256 / SHA-1 of installed `~/.local/bin/herdr` | TBD (must equal the two above) |
-| Backup of fork.4 | `/Users/kyle/.local/bin/herdr.bak-2026-10-02-fork.4`, SHA-256 TBD (must be `a056c207…f0d704`) |
-| Installed at / restart method | TBD (planned: `herdr server live-handoff`, see [Installing](#installing)) |
-| Server pid after install | TBD (a handed-off server is not launchd's pid) |
-| Live agy check | TBD: `herdr agent explain <agy pane> --json` on an idle agy 1.2.14 pane should show `live_prompt_box`, `visible_idle: true`, `2026.10.02.1` |
+| Installed `/Users/kyle/.local/bin/herdr` | SHA-256 `e338d2ce262b37e8c6ded2ee0d239822e88a9576d9af8b22aaee732b90257ad5`, SHA-1 `6f0c34941b099d2660e605ca695759d108162cc6`: identical to the build output. 21732032 bytes, mtime 2026-10-02 17:46:43 EDT |
+| Backup of fork.4 | `/Users/kyle/.local/bin/herdr.bak-2026-10-02-fork.4`, SHA-256 `a056c207580511a4fcc81b34f8f63b55ff871a9989d008a2f4be87f70dd0f704`, SHA-1 `82576e4ab8de60193ab437ed919a6cfe8d90a3c6`: identical to the fork.4 record below. 21715520 bytes, mtime preserved (2026-09-24 13:33) |
+| Restart method | `launchctl kickstart` of `gui/501/dev.skylled.guest.herdr`, with no live panes, so nothing was lost. **Not** the planned `live-handoff` |
+| Server after install | pid 67170, launchd-owned (`state = running`), `/Users/kyle/.local/bin/herdr server`, started 2026-10-02 17:47:05 EDT. Because it was a kickstart, launchd owns the server and there is no post-handoff respawn loop |
+| Live check | `session_list` reports `0.9.1+fork.5`. A fresh agy 1.2.14 session read as answerable at its prompt, then as blocked on a permission prompt. Both correct |
+
+**A stop or start of the guest's server ends pane processes.** The kickstart
+was safe only because no panes were live. With live panes, use
+`herdr server live-handoff` (see [Installing](#installing)); it is the only way
+to change binaries and keep pane processes alive.
 
 Checked before install:
 
@@ -521,7 +532,11 @@ different base (`0.9.0+fork.4` when last recorded). Moving it would be a rebase,
 not a patch install. That is its own decision, made when the host's fallback
 role needs agy detection.
 
-### This VM — `Kyles-Virtual-Machine`, arm64, audited 2026-09-26 (fork.4)
+### This VM — `Kyles-Virtual-Machine`, arm64, audited 2026-09-26 (fork.4, superseded by fork.5)
+
+Historical as of 2026-10-02: fork.5 replaced this build. The fork.4 binary
+survives as `/Users/kyle/.local/bin/herdr.bak-2026-10-02-fork.4` (same
+digests as below), which is the guest's rollback binary.
 
 | | |
 |---|---|
@@ -546,8 +561,9 @@ How the "built from" was established:
 So the running server has patches 1, 2, 3, 5, 6, 7 and 8, on upstream master
 `5a649142`, and not patch 4.
 
-There are **no** `herdr.bak*` files on this VM. There is no rollback binary here;
-the digests recorded for the M6 host below do not describe files on this machine.
+As of the 2026-09-26 audit there were **no** `herdr.bak*` files on this VM (the
+fork.5 install added the one above). The digests recorded for the M6 host below
+do not describe files on this machine.
 
 Detection state on this VM that is *not* in the binary, and changes behaviour:
 
@@ -669,7 +685,9 @@ every startup. If you add another version-keyed store, key it on
 > - **`herdr server live-handoff` keeps pane processes alive.** The old server
 >   passes every pane's PTY to a new server started from `--import-exe`, then
 >   exits. Tested fork.4 → fork.5 → fork.4 on 2026-10-02 (see
->   [Installed](#installed)). This is the guest's install method.
+>   [Installed](#installed)). This is the guest's install method whenever
+>   panes are live. (fork.5 itself went in by `launchctl kickstart`, because no
+>   panes were live at the time.)
 > - **Any stop/start ends pane processes**: `herdr server stop`, SIGTERM,
 >   `launchctl kickstart -k`, `groundctl stop`/`start`. herdr saves the
 >   session on a graceful exit and, on the next start, restores the layout and
@@ -764,7 +782,8 @@ Branches on `origin` that matter:
 | `backup/mac-mini-2026-09-17` | `a6cde880` | fork.1-era snapshot |
 | `fix/*` (four) | — | per-patch branches, all on the old base; patches 1-3 merged, 4 not |
 | `master` | `8da755fc` | **the build line since 2026-10-02**; fork PRs target it |
-| `build/fork-5-ql-283` | `85912345` | local only, not pushed: `master` + fork.5 bump, plus this FORK.md draft |
+| `build/fork-5-ql-283` | `6e5e31ce` | local only, not pushed: `master` + fork.5 bump (`85912345`, the installed build) + the FORK.md draft |
+| `docs/fork-5-ql-283` | — | the same commits plus the install record; the PR branch into `master` |
 
 ### Tracking config, as found 2026-09-26 on the VM
 
