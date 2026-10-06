@@ -1,0 +1,39 @@
+ch: permission rules are restricted to managed settings (allowManagedPermissionRulesOnly).
+u ▐▛███▛█  Claude Code v2.1.291
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   /…/49d6f484-b86f-4f2c-8333-22ac7fc49557/scratchpad/fixture-repo
+
+
+❯ Use the Write tool to create the file notes.txt with the content hello. Do nothing else.
+
+⏺ Write(notes.txt)
+  ⎿  User rejected write to notes.txt
+      1 hello
+
+✻ Cogitated for 3s · done 10:56 AM
+
+❯ Use the Bash tool to run exactly: mkdir -p build
+
+⏺ Bash(mkdir -p build)
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Baked for 1s · done 10:56 AM
+
+❯ Use the Bash tool to run exactly: npm test
+
+⏺ Bash(npm test)
+  ⎿  Waiting…
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Run tests
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ npm test
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ This command requires approval
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+
+ Esc to cancel · Tab to amend

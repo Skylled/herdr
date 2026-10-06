@@ -1,0 +1,21 @@
+position, mcp__computer-use__hold_key, mcp__computer-use__le
+ft_mouse_down, mcp__computer-use__left_mouse_up, mcp__comput
+er-use__computer_batch: permission rules are restricted to m
+anaged settings (allowManagedPermissionRulesOnly).
+Claude Code's fullscreen renderer has repeatedly failed to s
+tart on this machine, so it has been turned off here. Run /t
+ui fullscreen to try it again (this also resets after an upd
+ate).
+
+────────────────────────────────────────────────────────────
+  New MCP server found in this project: mimir
+
+  MCP servers may execute code or access system resources.
+  All tool calls require approval. Learn more in the MCP
+  documentation.
+
+    Use this MCP server
+    Use this and all future MCP servers in this project
+  ❯ Continue without using this MCP server
+
+  Enter to confirm · Esc to cancel

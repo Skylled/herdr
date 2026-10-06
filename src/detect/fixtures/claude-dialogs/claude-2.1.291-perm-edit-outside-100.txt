@@ -1,0 +1,39 @@
+❯ Use the Bash tool to run exactly: mkdir -p build
+
+⏺ Bash(mkdir -p build)
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Baked for 1s · done 10:56 AM
+
+❯ Use the Bash tool to run exactly: npm test
+
+⏺ Bash(npm test)
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Cooked for 1s · done 10:57 AM
+
+❯ Use the Bash tool to run exactly: curl -sI https://example.com
+
+⏺ Bash(curl -sI https://example.com)
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Brewed for 1s · done 10:57 AM
+
+❯ Use the Write tool to create the file /private/tmp/claude-501/outside-ql319.txt with the content
+  hi. Do nothing else.
+
+⏺ Write(/private/tmp/claude-501/outside-ql319.txt)
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ Create file
+ ../../../../outside-ql319.txt
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  1 hi
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Do you want to create outside-ql319.txt?
+ ❯ 1. Yes
+   2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this
+      session; Yes, and always allow access to /private/tmp/claude-501 for this session (shift+tab)
+   3. No
+
+ Esc to cancel · Tab to amend

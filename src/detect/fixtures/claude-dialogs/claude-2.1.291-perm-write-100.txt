@@ -1,0 +1,31 @@
+Ignoring --allowedTools mcp__computer-use__request_access, mcp__computer-use__screenshot, mcp__compu
+ter-use__zoom, mcp__computer-use__left_click, mcp__computer-use__double_click, mcp__computer-use__tr
+iple_click, mcp__computer-use__right_click, mcp__computer-use__middle_click, mcp__computer-use__type
+, mcp__computer-use__key, mcp__computer-use__scroll, mcp__computer-use__left_click_drag, mcp__comput
+er-use__mouse_move, mcp__computer-use__open_application, mcp__computer-use__switch_display, mcp__com
+puter-use__list_granted_applications, mcp__computer-use__read_clipboard, mcp__computer-use__write_cl
+ipboard, mcp__computer-use__wait, mcp__computer-use__cursor_position, mcp__computer-use__hold_key, m
+cp__computer-use__left_mouse_down, mcp__computer-use__left_mouse_up, mcp__computer-use__computer_bat
+ch: permission rules are restricted to managed settings (allowManagedPermissionRulesOnly).
+u ▐▛███▛█  Claude Code v2.1.291
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   /…/49d6f484-b86f-4f2c-8333-22ac7fc49557/scratchpad/fixture-repo
+
+
+❯ Use the Write tool to create the file notes.txt with the content hello. Do nothing else.
+
+⏺ Write(notes.txt)
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ Create file
+ notes.txt
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  1 hello
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Do you want to create notes.txt?
+ ❯ 1. Yes
+   2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this
+      session (shift+tab)
+   3. No
+
+ Esc to cancel · Tab to amend

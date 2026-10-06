@@ -1,5 +1,215 @@
 use super::*;
 
+// QL-321 explicitly requests captured Claude screens for this fork. Load both
+// shipping manifests directly so user overrides cannot affect the regressions.
+fn ql321_claude_manifests() -> Vec<LoadedManifest> {
+    [
+        include_str!("../manifests/claude.toml"),
+        include_str!("../../../distribution/agent-detection/claude.toml"),
+    ]
+    .into_iter()
+    .map(|content| {
+        loaded_manifest(
+            parse_manifest(content).unwrap(),
+            ManifestSource::Bundled,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+    })
+    .collect()
+}
+
+fn ql321_claude_explain(loaded: &LoadedManifest, screen: &str, title: &str) -> DetectionExplain {
+    evaluate_loaded_manifest(
+        Agent::Claude,
+        DetectionInput {
+            screen,
+            osc_title: title,
+            osc_progress: "",
+        },
+        loaded.clone(),
+        false,
+    )
+}
+
+#[test]
+fn ql321_claude_dialog_fixtures_name_blockers() {
+    let fixtures = [
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-trust-100.txt"),
+            "trust_folder_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-trust-60.txt"),
+            "trust_folder_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-trust-cursor-yes-100.txt"),
+            "trust_folder_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-mcp-100.txt"),
+            "mcp_server_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-mcp-60.txt"),
+            "mcp_server_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-mcp-cursor-use-100.txt"),
+            "mcp_server_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-mcp-two-servers-100.txt"),
+            "mcp_servers_select",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-perm-write-100.txt"),
+            "file_permission_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-perm-edit-100.txt"),
+            "file_permission_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-perm-edit-outside-100.txt"),
+            "file_permission_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-perm-mkdir-100.txt"),
+            "bash_permission_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-perm-npmtest-100.txt"),
+            "bash_permission_prompt",
+        ),
+        (
+            include_str!("../fixtures/claude-dialogs/claude-2.1.291-perm-curl-100.txt"),
+            "bash_permission_prompt",
+        ),
+    ];
+    let idle = include_str!("../fixtures/claude-dialogs/claude-2.1.291-idle-100.txt");
+    for loaded in ql321_claude_manifests() {
+        for (fixture, expected) in fixtures {
+            // Every selectable line can carry the cursor. Preserve all controls.
+            let unselected = fixture.replace('❯', " ");
+            let mut screens = vec![fixture.to_string()];
+            let region = after_last_horizontal_rule(&unselected);
+            for line in region.lines().filter(|line| {
+                let line = line.trim();
+                line.starts_with("1.")
+                    || line.starts_with("2.")
+                    || line.starts_with("3.")
+                    || line.starts_with("Use ")
+                    || line.starts_with("Continue ")
+                    || line.starts_with("Yes,")
+                    || line.starts_with("No,")
+                    || line.starts_with('[')
+                    || line == "Enable selected"
+            }) {
+                screens.push(unselected.replacen(line, &format!("❯ {}", line.trim()), 1));
+            }
+            for screen in screens {
+                for title in ["", "✳ Dialog | fixture"] {
+                    let result = ql321_claude_explain(&loaded, &screen, title);
+                    assert_eq!(result.state, AgentState::Blocked, "{expected}: {screen}");
+                    assert_eq!(
+                        result.matched_rule.as_ref().map(|r| r.id.as_str()),
+                        Some(expected)
+                    );
+                    assert!(result.visible_blocker);
+                    assert!(!result.visible_working);
+                    assert!(!result.skip_state_update);
+                }
+            }
+            // A complete old dialog in transcript must not claim the live prompt.
+            let quoted = format!("{fixture}\n{idle}");
+            let result = ql321_claude_explain(&loaded, &quoted, "");
+            assert_eq!(result.state, AgentState::Idle, "{expected}");
+            assert!(!result.visible_blocker);
+            // Partial dialogs should not claim a precise rule without controls.
+            for footer in [
+                "Esc to cancel",
+                "Tab to amend",
+                "Enter to confirm",
+                "Space to select",
+                "Esc to reject all",
+            ] {
+                if expected == "bash_permission_prompt" || !fixture.contains(footer) {
+                    continue;
+                }
+                let result = ql321_claude_explain(&loaded, &fixture.replace(footer, ""), "");
+                assert_ne!(
+                    result.matched_rule.as_ref().map(|r| r.id.as_str()),
+                    Some(expected),
+                    "{expected}: missing {footer}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn ql321_claude_background_shell_summary_is_working() {
+    let fixture = include_str!("../fixtures/claude-dialogs/background-shells.txt");
+    for loaded in ql321_claude_manifests() {
+        for count in ["1 shell", "2 shells", "12 shells"] {
+            let screen = fixture.replace("1 shell still", &format!("{count} still"));
+            for title in ["", "✳ Finished | fixture"] {
+                let result = ql321_claude_explain(&loaded, &screen, title);
+                assert_eq!(result.state, AgentState::Working);
+                assert_eq!(
+                    result.matched_rule.as_ref().map(|r| r.id.as_str()),
+                    Some("background_shells_working")
+                );
+                assert!(result.visible_working);
+                assert!(!result.visible_blocker);
+            }
+        }
+        for screen in [
+            fixture.replace("1 shell still running", "0 shells still running"),
+            fixture.replace(
+                "1 shell still running",
+                "1 shell still running in transcript",
+            ),
+            fixture.replace("1 shell still running", "1 shell"),
+            fixture.replace("1 shell still running", "1 MCP task still running"),
+            fixture.replace("\n\n─", "\nConversation continues here.\n\n─"),
+            fixture.replace("✻ Sautéed for 10s · 1 shell still running\n", ""),
+            fixture
+                .replace("✻ Sautéed for 10s · 1 shell still running\n", "")
+                .replace("❯\n", "❯ ✻ Sautéed for 10s · 1 shell still running\n"),
+        ] {
+            let result = ql321_claude_explain(&loaded, &screen, "");
+            assert_ne!(
+                result.matched_rule.as_ref().map(|r| r.id.as_str()),
+                Some("background_shells_working"),
+                "{screen}"
+            );
+        }
+        let idle = include_str!("../fixtures/claude-dialogs/claude-2.1.291-idle-100.txt");
+        let result = ql321_claude_explain(&loaded, idle, "");
+        assert_eq!(result.state, AgentState::Idle);
+        assert!(!result.visible_working);
+        // MCP work retains its existing separate signal.
+        let mcp = fixture.replace("1 shell still running", "2 MCP tasks still running");
+        let result = ql321_claude_explain(&loaded, &mcp, "");
+        assert_eq!(result.state, AgentState::Working);
+        assert_eq!(
+            result.matched_rule.as_ref().map(|r| r.id.as_str()),
+            Some("background_mcp_task_working")
+        );
+        // Stale activity above a newly drawn dialog must yield to that dialog.
+        let dialog = include_str!("../fixtures/claude-dialogs/claude-2.1.291-perm-edit-100.txt");
+        let screen = format!("{fixture}\n{dialog}");
+        let result = ql321_claude_explain(&loaded, &screen, "");
+        assert_eq!(result.state, AgentState::Blocked);
+        assert!(!result.visible_working);
+    }
+}
+
 // Quest Log #239 explicitly requests a screen fixture for this fork regression.
 // Exercise both shipping copies with OSC titles: screen text alone misses the bug.
 #[test]
