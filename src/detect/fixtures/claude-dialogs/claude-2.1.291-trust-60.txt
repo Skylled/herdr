@@ -1,0 +1,29 @@
+position, mcp__computer-use__hold_key, mcp__computer-use__le
+ft_mouse_down, mcp__computer-use__left_mouse_up, mcp__comput
+er-use__computer_batch: permission rules are restricted to m
+anaged settings (allowManagedPermissionRulesOnly).
+Claude Code's fullscreen renderer has repeatedly failed to s
+tart on this machine, so it has been turned off here. Run /t
+ui fullscreen to try it again (this also resets after an upd
+ate).
+
+────────────────────────────────────────────────────────────
+ Accessing workspace:
+
+ /private/tmp/claude-501/-Users-kyle-Repos-earshot/49d6f484
+ -b86f-4f2c-8333-22ac7fc49557/scratchpad/fixture-narrow
+
+ Quick safety check: Is this a project you created or one
+ you trust? (Like your own code, a well-known open source
+ project, or work from your team). If not, take a moment to
+ review what's in this folder first.
+
+ Claude Code'll be able to read, edit, and execute files
+ here.
+
+ Security guide
+
+ ❯ No, exit
+   Yes, I trust this folder
+
+ Enter to confirm · Esc to cancel

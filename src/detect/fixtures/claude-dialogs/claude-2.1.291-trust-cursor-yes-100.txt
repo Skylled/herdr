@@ -1,0 +1,28 @@
+Ignoring --allowedTools mcp__computer-use__request_access, mcp__computer-use__screenshot, mcp__compu
+ter-use__zoom, mcp__computer-use__left_click, mcp__computer-use__double_click, mcp__computer-use__tr
+iple_click, mcp__computer-use__right_click, mcp__computer-use__middle_click, mcp__computer-use__type
+, mcp__computer-use__key, mcp__computer-use__scroll, mcp__computer-use__left_click_drag, mcp__comput
+er-use__mouse_move, mcp__computer-use__open_application, mcp__computer-use__switch_display, mcp__com
+puter-use__list_granted_applications, mcp__computer-use__read_clipboard, mcp__computer-use__write_cl
+ipboard, mcp__computer-use__wait, mcp__computer-use__cursor_position, mcp__computer-use__hold_key, m
+cp__computer-use__left_mouse_down, mcp__computer-use__left_mouse_up, mcp__computer-use__computer_bat
+ch: permission rules are restricted to managed settings (allowManagedPermissionRulesOnly).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ Accessing workspace:
+
+ /private/tmp/claude-501/-Users-kyle-Repos-earshot/49d6f484-b86f-4f2c-8333-22ac7fc49557/scratchpad/
+ fixture-repo
+
+ Quick safety check: Is this a project you created or one you trust? (Like your own code, a
+ well-known open source project, or work from your team). If not, take a moment to review what's in
+ this folder first.
+
+ Claude Code'll be able to read, edit, and execute files here.
+
+ Security guide
+
+   No, exit
+ ❯ Yes, I trust this folder
+
+ Enter to confirm · Esc to cancel

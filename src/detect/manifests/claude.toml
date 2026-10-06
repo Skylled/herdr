@@ -1,7 +1,7 @@
 id = "claude"
-version = "2026.09.11.1"
+version = "2026.10.06.1"
 min_engine_version = 2
-updated_at = "2026-09-11T00:00:00Z"
+updated_at = "2026-10-06T00:00:00Z"
 aliases = ["claude-code"]
 
 [[rules]]
@@ -31,6 +31,16 @@ priority = 965
 region = "last_non_empty_above_prompt_box"
 visible_working = true
 line_regex = ['^\s*[\x{002A}\x{00B7}\x{2722}\x{2736}\x{273B}\x{273D}]\s+Waiting for [1-9]\d* background agents? to finish\s*$']
+
+[[rules]]
+id = "background_shells_working"
+state = "working"
+priority = 965
+region = "last_non_empty_above_prompt_box"
+visible_working = true
+# QL-321: a finished foreground turn can still have background work. Only the
+# activity summary immediately above the prompt counts, never the shell footer.
+line_regex = ['^\s*[\x{002A}\x{00B7}\x{2722}\x{2733}\x{2736}\x{273B}\x{273D}]\s+\S.*·\s*[1-9]\d*\s+shells?\s+still\s+running\s*$']
 
 [[rules]]
 id = "background_mcp_task_working"
@@ -74,6 +84,58 @@ any = [
   { contains = ["ctrl+e", "collapse"] },
   { contains = ["↑↓ scroll"] },
   { contains = ["? for shortcuts"] },
+]
+
+[[rules]]
+id = "trust_folder_prompt"
+state = "blocked"
+priority = 990
+region = "after_last_horizontal_rule"
+visible_blocker = true
+contains = ["enter to confirm", "esc to cancel"]
+line_regex = [
+  '(?i)^\s*Accessing workspace:\s*$',
+  '(?i)^\s*❯?\s*Yes, I trust this folder\s*$',
+  '(?i)^\s*❯?\s*No, exit\s*$',
+]
+
+[[rules]]
+id = "mcp_server_prompt"
+state = "blocked"
+priority = 990
+region = "after_last_horizontal_rule"
+visible_blocker = true
+contains = ["enter to confirm", "esc to cancel"]
+line_regex = [
+  '(?i)^\s*New MCP server found in this project:\s*\S.*$',
+  '(?i)^\s*❯?\s*Use this MCP server\s*$',
+  '(?i)^\s*❯?\s*Continue without using this MCP server\s*$',
+]
+
+[[rules]]
+id = "mcp_servers_select"
+state = "blocked"
+priority = 990
+region = "after_last_horizontal_rule"
+visible_blocker = true
+contains = ["space to select", "esc to reject all"]
+line_regex = [
+  '(?i)^\s*[1-9]\d* new MCP servers found in this project\s*$',
+  '(?i)^\s*❯?\s*Enable selected\s*$',
+  '^\s*❯?\s*\[[✔ ]\]\s+\S.*$',
+]
+
+[[rules]]
+id = "file_permission_prompt"
+state = "blocked"
+priority = 985
+region = "after_last_horizontal_rule"
+visible_blocker = true
+contains = ["esc to cancel", "tab to amend"]
+line_regex = [
+  '(?i)^\s*Do you want to (?:create|make this edit to) .+\?\s*$',
+  '(?i)^\s*❯?\s*1\.\s*Yes\b',
+  '(?i)^\s*❯?\s*3\.\s*No\b',
 ]
 
 [[rules]]

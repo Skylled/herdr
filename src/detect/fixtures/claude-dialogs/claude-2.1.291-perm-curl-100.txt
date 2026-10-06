@@ -1,0 +1,39 @@
+
+⏺ Write(notes.txt)
+  ⎿  User rejected write to notes.txt
+      1 hello
+
+✻ Cogitated for 3s · done 10:56 AM
+
+❯ Use the Bash tool to run exactly: mkdir -p build
+
+⏺ Bash(mkdir -p build)
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Baked for 1s · done 10:56 AM
+
+❯ Use the Bash tool to run exactly: npm test
+
+⏺ Bash(npm test)
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Cooked for 1s · done 10:57 AM
+
+❯ Use the Bash tool to run exactly: curl -sI https://example.com
+
+⏺ Bash(curl -sI https://example.com)
+  ⎿  Waiting…
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Check response headers from example.com
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ curl -sI https://example.com
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ This command requires approval
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+
+ Esc to cancel · Tab to amend
