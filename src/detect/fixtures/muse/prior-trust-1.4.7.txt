@@ -1,0 +1,22 @@
+kyle@Kyles-Virtual-Machine ql366-skkyle@Kyles-V
+irtual-Machine ql366-scratch1 % echo NESTED_OK;
+ pwd
+NESTED_OK
+/private/tmp/ql366-scratch1
+kyle@Kyles-Virtual-Machine ql366-scratch1 % cd
+/private/tmp/ql366-trust1 && muse --reasoning-e
+ffort low --approval-judge off
+Muse Code updated 1.4.6-R6000.1 -> 1.4.7-R6101.
+1
+Do you trust this workspace?
+Workspace: /private/tmp/ql366-trust1
+
+Trusting allows project-local skills, rules,
+hooks, and plugin config to load before the
+model runs.
+Only trust this workspace when you trust its
+contents.
+⟩ 1  Trust and continue
+  2  Quit
+
+Use Up/Down or 1/2, then Enter. Esc quits.

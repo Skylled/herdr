@@ -1689,3 +1689,115 @@ contains = ["title-busy-marker"]
         assert!(!result.visible_idle);
     });
 }
+
+#[test]
+fn current_footer_activity_outvotes_idle_independently_of_row_count() {
+    // QL-366: exercise region and priority semantics with synthetic controls.
+    // A composer and a footer can coexist with active background work; do not
+    // depend on a CLI's task labels, prompt glyphs, or bundled rule priorities.
+    with_manifest_dirs("current-footer-activity", || {
+        write_local_codex(&rules_manifest(
+            r#"
+[[rules]]
+id = "composer"
+state = "idle"
+priority = 10
+visible_idle = true
+contains = ["composer-marker"]
+
+[[rules]]
+id = "background"
+state = "working"
+priority = 20
+region = "after_last_horizontal_rule"
+visible_working = true
+contains = ["tray-marker"]
+line_regex = ['^job-\d+ active$']
+
+[[rules]]
+id = "human"
+state = "blocked"
+priority = 30
+region = "bottom_non_empty_lines(3)"
+visible_blocker = true
+contains = ["accept-marker", "reject-marker"]
+
+[[rules]]
+id = "review"
+state = "working"
+priority = 40
+region = "bottom_non_empty_lines(3)"
+visible_working = true
+line_regex = ['^review-marker$']
+"#,
+        ));
+        for count in [1, 4, 16, 64] {
+            let rows = (0..count)
+                .map(|i| format!("job-{i} active\n"))
+                .collect::<String>();
+            let screen = format!("composer-marker\n────\ntray-marker\n{rows}footer-marker\n");
+            let working = explain(Agent::Codex, &screen);
+            assert_eq!(working.state, AgentState::Working, "{count} rows");
+            assert!(working.visible_working);
+            assert!(!working.visible_idle);
+            let blocked = explain(
+                Agent::Codex,
+                &format!("{screen}accept-marker reject-marker\n"),
+            );
+            assert_eq!(blocked.state, AgentState::Blocked);
+            assert!(blocked.visible_blocker);
+            let review = explain(
+                Agent::Codex,
+                &format!("{screen}accept-marker reject-marker\nreview-marker\n"),
+            );
+            assert_eq!(review.state, AgentState::Working);
+            assert!(review.visible_working);
+            assert!(!review.visible_blocker);
+        }
+        for screen in [
+            "tray-marker\njob-1 active\n────\ncomposer-marker\nfooter-marker\n",
+            "composer-marker\n────\ntray-marker\njob-1 complete\nfooter-marker\n",
+            "composer-marker\n────\njob-1 active\nfooter-marker\n",
+        ] {
+            assert_eq!(explain(Agent::Codex, screen).state, AgentState::Idle);
+        }
+    });
+}
+
+#[test]
+fn non_skipping_unknown_overlay_clears_visible_idle_evidence() {
+    // QL-366: overlays may intentionally publish unknown instead of retaining
+    // an old settled state. Verify the engine's contract without agent screens.
+    with_manifest_dirs("non-skipping-overlay", || {
+        write_local_codex(&rules_manifest(
+            r#"
+[[rules]]
+id = "composer"
+state = "idle"
+priority = 10
+visible_idle = true
+contains = ["composer-marker"]
+
+[[rules]]
+id = "overlay"
+state = "unknown"
+priority = 20
+contains = ["change-marker", "close-marker"]
+"#,
+        ));
+        let result = explain(Agent::Codex, "composer-marker change-marker close-marker");
+        assert_eq!(result.state, AgentState::Unknown);
+        assert!(!result.skip_state_update);
+        assert!(!result.visible_idle);
+        assert!(!result.visible_working);
+        assert!(!result.visible_blocker);
+        assert!(!should_skip_state_update(
+            Agent::Codex,
+            "composer-marker change-marker close-marker"
+        ));
+        assert_eq!(
+            explain(Agent::Codex, "composer-marker change-marker").state,
+            AgentState::Idle
+        );
+    });
+}

@@ -1,0 +1,51 @@
+◆ Read skill git · built-in · 4 KB
+
+◆ Ran command · Check test rerun output file · ✓ · 0.3s · ctrl+o
+
+◆ Used tool operation
+└ {"items":[{"work_id":"work.v2.managed_bash.sha256.0e65c20571a994236fda2f9
+cf4d73a2e3f1e7ae07b801dcb3be951dc18549fc2","family":"managed_bash","display
+_label":"Build and smoke-test muse slot end to end","status":"active","stop
+pable":true},{"work_id":"work.v2.managed_bash.sha256.39bf0b582301b2313dc283
+004cd8194859eb656978ba4081440800965bcb4cfa","family":"managed_bash","displa
+y_label":"Run tests and show summary tail","status":"active","stoppable":tr
+ue},{"work_id":"work.v2.managed_bash.sha256.942ba8ac984193bee569c1362258548
+b0274bd3484fae98f2a9b701a68d171cd","family":"managed_bash","display_label":
+"Typecheck the worktree","status":"active","stoppable":true},{"work_id":"wo
+rk.v2.managed_bash.sha256.9a1265f77b75d8bfdccad962bca498b7c68343cfdcfa3b16c
+e8fdd806d3a4465","family":"managed_bash","display_label":"Re-run tests capt
+uring summary counts","status":"active","stoppable":true},{"work_id":"work.
+v2.managed_bash.sha256.ce638fbd40bef43a4fd9db8dc436e507bcf0d3b4ae240b4282a6
+9f6f47350a87","family":"managed_bash","display_label":"Run Bursar test suit
+e","status":"active","stoppable":true}],"next_after_work_id":null}
+
+◆ Stopping work — cancelled · ctrl+o
+
+◆ Finished · Re-run tests capturing summary counts · ⊘ · cancelled · ctrl+o
+
+◆ Stopping work — cancelled · ctrl+o
+
+◆ Finished · Run tests and show summary tail · ⊘ · cancelled · ctrl+o
+
+◆ Ran command · Run single clean test suite with timeout · ✓ · 2m · ctrl+o
+
+◆ Backgrounded · Run test suite and capture counts · 4m · ctrl+o
+
+◆ Ran command · Check test progress after delay · ✓ · 45s · ctrl+o
+
+◆ Finished · Run test suite and capture counts · ⊘ · cancelled · ctrl+o
+
+◆ Stopping work — cancelled · ctrl+o
+
+◆ Ran 8 commands · Fix log expectation and run full s… · +7 ✓ · 1m · ctrl+o
+
+◈ Calling tools (12m 04s · esc to interrupt)
+
+── Voice input (⌥ + v to start) ───────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────
+main · ↓ to select
+├ ◆ Typecheck the worktree  running                                 42m 04s
+├ ◆ Run Bursar test suite  running                                  38m 11s
+└ ◆ Build and smoke-test muse slot end to end  running              31m 57s
+  muse-wonder-full-1.0 · high · ~/Repos/bursar · Auto-review

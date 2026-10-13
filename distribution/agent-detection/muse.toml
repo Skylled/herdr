@@ -1,13 +1,13 @@
 id = "muse"
-version = "2026.08.26.1"
+version = "2026.10.13.1"
 min_engine_version = 2
-updated_at = "2026-08-26T00:00:00Z"
+updated_at = "2026-10-13T00:00:00Z"
 aliases = ["muse-code", "muse-cli"]
 
 # Evidence: live bottom-buffer captures from Muse Code 0.2.1 in Herdr, using a local
 # deterministic Responses provider so each UI state could be held and inspected.
 #
-# Idle has a `⟩` prompt and `model · effort · cwd` footer. Active turns show
+# Muse 0.2.1 idle has a `⟩` prompt and `model · effort · cwd` footer. Active turns show
 # `◆ Working (... · esc to interrupt)` or another activity label with the same interrupt hint.
 #
 # Structured questions show two co-occurring footer controls:
@@ -17,13 +17,25 @@ aliases = ["muse-code", "muse-cli"]
 #
 # First launch in an untrusted directory shows `Do you trust this workspace?` together with
 # `Trust and continue`. This is a real blocker. User-opened `/theme` and `/skills` menus are
-# not blockers; their paired footer controls identify overlays whose prior state must be kept.
+# not blockers; their paired footer controls identify overlays that publish unknown
+# instead of retaining a stale idle/done state. Settings footer controls were
+# recovered from the existing 1.4.6 binary-string dump; see the capture limits below.
 #
 # Muse 0.2.1 command approval shows `Allow this stage once` together with
 # `Always allow in this workspace`. Muse 0.1 used `Allow once` with
 # `Allow for this session`. Network approval shows `Yes, proceed` together with
 # `Yes, don't ask again this session`. Each approval rule requires a pair because Muse can
 # emit any one of these phrases as ordinary assistant text after a completed turn.
+
+# QL-366: read-only Muse 1.4.6-R6000.1 detection-buffer captures on 2026-10-13
+# show a `❯` composer, an activity line above it, and running task rows below it.
+# The composer remains visible during background work. The footer alone cannot
+# distinguish idle from an approval dialog, so it is never sufficient by itself.
+# Human command escalation has the paired Yes/No controls plus /permissions.
+# `Auto-review` is a persistent mode label, not evidence of a pending judge.
+# The exact `Reviewing approval request` label is present in the existing 1.4.6
+# binary-string capture and corroborated by Kyle; its live transition has not
+# been captured. See src/detect/fixtures/muse/README.md for evidence and limits.
 
 [[rules]]
 id = "workspace_trust_blocked"
@@ -53,20 +65,42 @@ id = "menu_overlay"
 state = "unknown"
 priority = 940
 region = "bottom_non_empty_lines(8)"
-skip_state_update = true
 any = [
   { contains = ["enter confirm", "esc go back"] },
   { contains = ["enter save", "esc go back"] },
+  { contains = ["tab/enter change", "type to search", "esc go back"] },
   { contains = ["space toggle", "esc close", "type filter"] },
+]
+
+[[rules]]
+id = "approval_review_working"
+state = "working"
+priority = 965
+region = "bottom_non_empty_lines(12)"
+visible_working = true
+# Match the status label itself, never the persistent Auto-review footer.
+line_regex = ['^\s*[◆◇◈]?\s*Reviewing approval request\s*$']
+
+[[rules]]
+id = "background_tasks_working"
+state = "working"
+priority = 920
+region = "after_last_horizontal_rule"
+visible_working = true
+# The current tray is below the composer's closing border. Both its selector
+# and an active tree row are required; transcript summaries are not evidence.
+line_regex = [
+  '^\s*main · ↓ to select\s*$',
+  '^\s*[├└]\s+[◆◇◈]\s+\S.*\s+running\s+\d+[smh](?:\s+\d+[smh])*\s*$',
 ]
 
 [[rules]]
 id = "working_esc_interrupt"
 state = "working"
 priority = 900
-region = "bottom_non_empty_lines(8)"
+region = "bottom_non_empty_lines(20)"
 visible_working = true
-contains = ["esc to interrupt"]
+line_regex = ['(?i)^\s*[◆◇◈]\s+.+\([^\n]*esc to interrupt\)\s*$']
 not = [
   { contains = ["Enter to select", "Tab for an optional note"] },
   { contains = ["Enter to toggle", "Esc to interrupt"] },
@@ -75,13 +109,17 @@ not = [
 [[rules]]
 id = "blocked_approval"
 state = "blocked"
-priority = 850
+priority = 955
 region = "bottom_non_empty_lines(8)"
 visible_blocker = true
 any = [
   { contains = ["Allow this stage once", "Always allow in this workspace"] },
   { contains = ["Allow once", "Allow for this session"] },
   { contains = ["Yes, proceed", "Yes, don't ask again this session"] },
+  { contains = ["Change approval defaults in /permissions"], line_regex = [
+    '^\s*[›⟩]?\s*1\. Yes, proceed \(y\)\s*$',
+    '^\s*[›⟩]?\s*2\. No, and tell Muse Code what to do differently \(esc\)\s*$',
+  ] },
 ]
 
 [[rules]]
@@ -91,8 +129,8 @@ priority = 700
 region = "bottom_non_empty_lines(5)"
 visible_idle = true
 any = [
-  { line_regex = ['^\s*⟩\s*$'] },
-  { line_regex = ['^\s*⟩\s+\S'] },
+  { line_regex = ['^\s*[⟩❯]\s*$'] },
+  { line_regex = ['^\s*[⟩❯]\s+\S'] },
 ]
 not = [
   { contains = ["esc to interrupt"] },
@@ -100,6 +138,7 @@ not = [
   { contains = ["Enter to toggle", "Esc to interrupt"] },
   { contains = ["enter confirm", "esc go back"] },
   { contains = ["enter save", "esc go back"] },
+  { contains = ["tab/enter change", "type to search", "esc go back"] },
   { contains = ["space toggle", "esc close", "type filter"] },
 ]
 
@@ -107,7 +146,11 @@ not = [
 id = "idle_status_fallback"
 state = "idle"
 priority = 500
-region = "bottom_non_empty_lines(3)"
+region = "bottom_non_empty_lines(8)"
 visible_idle = true
-line_regex = ['^\s*\S+ · (none|minimal|low|medium|high|xhigh|ultra) · ']
+line_regex = ['^\s*\S+ · (none|minimal|low|medium|high|xhigh|max|ultra) · ']
+any = [
+  { line_regex = ['^\s*[⟩❯]\s*$'] },
+  { line_regex = ['^\s*[⟩❯]\s+\S'] },
+]
 not = [{ contains = ["esc to interrupt"] }]

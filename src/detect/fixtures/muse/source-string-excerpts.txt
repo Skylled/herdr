@@ -1,0 +1,13 @@
+QL-366 existing source dump /private/tmp/muse-strings.txt
+sha256 e939a0137ef289681ec92676d8a629fe44085b6d30897e1aa65c1d918eeaeb41
+
+'switch keys while a run is active. Try again when it finishes.Enter a key first.Reviewing approval request\ntuiexternalinvalid-plugin-packagemultiple-manifestsinvalid-manifest-jsoninvalid'
+
+'runningesc cancels the message, /quit still exits  no matching settings\n move \n tab/enter change \n type to search \n esc go back \n filter: Search settingsWorkflowsNo workflow ru'
+
+'the message, /quit still exits  no matching settings\n move \n tab/enter change \n type to search \n esc go back \n filter: Search settingsWorkflowsNo workflow runs yet.Esc to clo'
+
+'  \n more  no matching agent threadsup/down move - type to filter - enter open - esc go back - filtering "Open an agent thread without losing your draft.> (current)\nAllow t'
+
+'dcwdpermissionsjustificationttyarguments_jsonShellExecutionToolInvocationControlAutomatedReviewingHumanPendingDelegatedSubagentShellCommandUrlInProcessPureInProcessMediatedSandboxedProcessRe'
+
