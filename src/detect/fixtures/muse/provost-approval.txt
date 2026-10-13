@@ -1,0 +1,15 @@
+── Voice input (⌥ + v to start) ───────────────────────────────────────────
+Would you like to run the following command?
+
+  $ cd /tmp/ql363-muse-probe2 && HOME=/tmp/ql363-muse-home
+    ~/.local/bin/muse exec --provider echo --json --session-id
+    550e8400-e29b-41d4-a716-446655440000 "v4 probe" >v4.out 2>v4.err; echo
+    exit=$?; tail -1 v4.out | python3 -c "import sys,json;
+    r=json.load(sys.stdin); print(r['payload_type'], r['stream'])"; cat
+    v4.err
+
+› 1. Yes, proceed (y)
+  2. No, and tell Muse Code what to do differently (esc)
+Change approval defaults in /permissions
+───────────────────────────────────────────────────────────────────────────
+  muse-wonder-full-1.0 · high · ~/Repos/provost · Auto-review

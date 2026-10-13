@@ -1,0 +1,51 @@
+
+  Stop after about two hours even if incomplete. Write
+  ~/Inbox/ql-363-provost-muse.md: what Muse supports, the adapter design
+  and its exclusions, how quota is bound, test results, the PR, and harness
+  friction you hit. Cite QL-363 in commits and the PR.
+
+  [Earshot brief b-5qepkjmx · check:
+  /usr/local/libexec/earshot-grants/brief-check b-5qepkjmx]
+
+  Read /Library/Application Support/ClaudeCode/CLAUDE.md
+
+◆ Ran 2 commands · Verify Earshot brief signatu… · ✗ 1 failed · 1m · ctrl+o
+
+◆ Read skill durable-test-collateral · built-in · 4 KB
+
+◆ Ran command · List repo, adapters, inbox files · ✓ · 0.2s · ctrl+o
+
+  Read 7 files · ctrl+o
+
+◆ Ran command · List source tree and package · ✓ · 0.5s · ctrl+o
+
+  Read 13 files · 1 search · ctrl+o
+
+◆ Ran 6 commands · Read Bursar muse window contract · +5 ✓ · 1.5s · ctrl+o
+
+  Read /Users/kyle/Repos/bursar/worktrees/ql363-muse/src/collectors/muse.ts
+
+◆ Ran command · Check Bursar window naming rule · ✓ · 0.2s · ctrl+o
+
+  Read tests/bursar.test.ts
+
+◆ Ran 5 commands · Enumerate payload types in own ses… · +4 ✓ · 3m · ctrl+o
+
+  Read src/adapters.ts
+
+◆ Ran 9 commands · List muse settings to… · ✗ 2 failed · +6 ✓ · 9m · ctrl+o
+
+◇ Thinking (20m 44s · esc to interrupt)
+  Extending env filtering to plausible auth and base-URL variants while pin
+
+  ◆ Read probe, SPEC/HANDOFF/execution + adapter docs/code; verify muse CLI
+  ◇ Create worktree off origin/main under feat/ql-363/ and register it
+  ◇ Implement Muse adapter, configs/targets, quota binding/placeholder
+  ◇ Add docs/adapters/muse.md and offline tests; run npm run check + smoke
+  ◇ Commit QL-363, grant-check/push/PR via .earshot/pr.md if granted
+  ◇ Write ~/Inbox/ql-363-provost-muse.md report
+
+── Voice input (⌥ + v to start) ───────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────
+  muse-wonder-full-1.0 · high · ~/Repos/provost · Auto-review
