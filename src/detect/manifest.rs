@@ -1542,11 +1542,13 @@ fn slice_from_line_index<'a>(content: &'a str, lines: &[&str], index: usize) -> 
 }
 
 fn line_start_offset(content: &str, lines: &[&str], index: usize) -> usize {
-    lines[..index.min(lines.len())]
-        .iter()
-        .map(|line| line.len() + 1)
-        .sum::<usize>()
-        .min(content.len())
+    // Every line is a subslice produced by content.lines(). Derive the start
+    // from that subslice: lines() strips CRLF, so summing line.len() + 1
+    // undercounts CRLF bytes and can land inside a Unicode character.
+    lines
+        .get(index)
+        .map(|line| line.as_ptr() as usize - content.as_ptr() as usize)
+        .unwrap_or(content.len())
 }
 
 #[cfg(test)]

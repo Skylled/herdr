@@ -1,0 +1,20 @@
+      ▄▀▀▄        Antigravity CLI 1.3.3
+     ▀▀▀▀▀▀       user@example.com (Google AI Pro)
+    ▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (Low)
+   ▄▀▀    ▀▀▄     /private/tmp/ql378-agy-capture
+  ▄▀▀      ▀▀▄
+
+────────────────────────────────────────────────────────────
+> Run the harmless shell command sleep 8 then printf QL378_OK. Do not read, edit, or create any
+  files.
+
+● Ran (sleep 8 && printf "QL378_OK") (ctrl+o to expand)
+
+  The command has completed successfully:
+
+    QL378_OK
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────
+? for shortcuts                                                               Gemini 3.8 Flash · low

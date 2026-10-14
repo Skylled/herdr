@@ -446,7 +446,6 @@ fn agy_prompt_box_is_idle_with_and_without_the_1_2_14_footer() {
         // Anything the rule cannot vouch for falls back rather than reading idle.
         for screen in [
             AGY_1_2_14_IDLE.replace("\n>\n", "\n> half a thought\n"),
-            AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, "esc to cancel"),
             AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, "Gemini 3.8 Flash · high"),
             AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, "x ? for shortcuts"),
             format!("{AGY_1_2_14_IDLE}later output"),
@@ -482,11 +481,128 @@ fn agy_turn_in_progress_is_working_not_idle() {
             assert!(result.visible_working, "{screen:?}");
             assert!(!result.visible_idle, "{screen:?}");
         }
-        for footer in ["esc to interrupt", "? for shortcuts · esc to interrupt"] {
+        for footer in [
+            "esc to cancel",
+            "esc to interrupt",
+            "? for shortcuts · esc to interrupt",
+        ] {
             let screen = AGY_1_2_14_IDLE.replace(AGY_1_2_14_FOOTER, footer);
             assert!(!explain_agy(&loaded, &screen).visible_idle, "{screen:?}");
         }
     }
+}
+
+// QL-378 explicitly requests captured-screen regression tests in this fork.
+// See fixtures/agy-1.3.3/README.md for capture provenance and probe limits.
+const AGY_1_3_3_IDLE: &str = include_str!("../fixtures/agy-1.3.3/idle-100.txt");
+const AGY_1_3_3_WORKING: &str = include_str!("../fixtures/agy-1.3.3/working-100.txt");
+const AGY_1_3_3_APPROVAL: &str = include_str!("../fixtures/agy-1.3.3/approval-100.txt");
+
+#[test]
+fn agy_1_3_3_captured_states_and_idle_vetoes() {
+    let after_turn = include_str!("../fixtures/agy-1.3.3/idle-after-turn-100.txt");
+    let live_working = include_str!("../fixtures/agy-1.3.3/live-working-61.txt");
+    let trust = include_str!("../fixtures/agy-1.3.3/trust-100.txt");
+    let help = include_str!("../fixtures/agy-1.3.3/help-menu-100.txt");
+    for loaded in agy_manifests() {
+        for (capture, expected) in [
+            (AGY_1_3_3_IDLE, AgentState::Idle),
+            (after_turn, AgentState::Idle),
+            (AGY_1_3_3_WORKING, AgentState::Working),
+            (live_working, AgentState::Working),
+            (AGY_1_3_3_APPROVAL, AgentState::Blocked),
+            (trust, AgentState::Blocked),
+        ] {
+            for screen in [capture.to_string(), capture.replace('\n', "\r\n")] {
+                let result = explain_agy(&loaded, &screen);
+                assert_eq!(result.state, expected, "{screen:?}");
+                assert!(result.fallback_reason.is_none(), "{screen:?}");
+                assert_eq!(result.visible_idle, expected == AgentState::Idle);
+                assert_eq!(result.visible_working, expected == AgentState::Working);
+                assert_eq!(result.visible_blocker, expected == AgentState::Blocked);
+            }
+        }
+        assert!(!explain_agy(&loaded, help).visible_idle);
+
+        // Derived probes, not additional real captures: a notice above the box
+        // cannot hide active controls or create a prompt in an arbitrary screen.
+        let notice = "Verbosity now defaults to medium\n";
+        for (screen, expected) in [
+            (format!("{notice}{AGY_1_3_3_IDLE}"), AgentState::Idle),
+            (format!("{notice}{AGY_1_3_3_WORKING}"), AgentState::Working),
+            (format!("{notice}{AGY_1_3_3_APPROVAL}"), AgentState::Blocked),
+            // Between redraws the interrupt footer alone still means working.
+            (
+                AGY_1_3_3_WORKING
+                    .lines()
+                    .filter(|line| !line.contains("Running command..."))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                AgentState::Working,
+            ),
+            // Modern permission controls survive title/body truncation.
+            (
+                AGY_1_3_3_APPROVAL
+                    .lines()
+                    .rev()
+                    .take(2)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                AgentState::Blocked,
+            ),
+        ] {
+            let result = explain_agy(&loaded, &screen);
+            assert_eq!(result.state, expected, "{screen:?}");
+            assert_eq!(result.visible_idle, expected == AgentState::Idle);
+            assert!(result.fallback_reason.is_none(), "{screen:?}");
+        }
+        // Only the observed permissions warning is an alternate footer.
+        // These warning variants are derived from the live 61-column capture.
+        for warning in [
+            "Global config.json no...              Gemini 3.8 Flash · high",
+            "Global config.json not found. Using cached permissions.",
+        ] {
+            let screen = AGY_1_3_3_IDLE
+                .lines()
+                .map(|line| {
+                    if line.starts_with("? for shortcuts") {
+                        warning
+                    } else {
+                        line
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let result = explain_agy(&loaded, &screen);
+            assert!(result.visible_idle, "{screen:?}");
+            assert!(result.fallback_reason.is_none());
+            let busy = format!("⠋  Running command...\n{screen}");
+            assert!(!explain_agy(&loaded, &busy).visible_idle);
+        }
+        for screen in [
+            notice.to_string(),
+            format!("{AGY_1_3_3_IDLE}unrecognised footer\n"),
+            AGY_1_3_3_IDLE.replace("\n>\n", "\n> typed draft\n"),
+            // A spinner may show a thought summary, not just an -ing verb.
+            format!("⠋  Reviewing the result\n{AGY_1_3_3_IDLE}"),
+            format!("↑/↓ Navigate · tab Amend\nesc to cancel\n{AGY_1_3_3_IDLE}"),
+            format!("↑/↓ Navigate · enter Select · esc Skip\n{AGY_1_3_3_IDLE}"),
+        ] {
+            assert!(!explain_agy(&loaded, &screen).visible_idle, "{screen:?}");
+        }
+    }
+}
+
+#[test]
+fn agy_bundled_and_published_fix_supersedes_the_idleless_remote_cache() {
+    let bundled = include_str!("../manifests/antigravity.toml");
+    let published = include_str!("../../../distribution/agent-detection/antigravity.toml");
+    assert_eq!(bundled, published);
+    let manifest = parse_manifest(bundled).unwrap();
+    assert!(manifest.version.unwrap() > ManifestVersion::parse("2026.10.05.1").unwrap());
 }
 
 // Codex is only a registry key here; behavior tests supply synthetic rules.
@@ -1800,4 +1916,30 @@ contains = ["change-marker", "close-marker"]
             AgentState::Idle
         );
     });
+}
+
+#[test]
+fn line_regions_preserve_crlf_unicode_boundaries() {
+    for separator in ["\n", "\r\n"] {
+        let screen = ["α", "────", "middle", "────", "footer"].join(separator);
+        let lines: Vec<_> = screen.lines().collect();
+        for (index, line) in lines.iter().enumerate() {
+            let offset = line_start_offset(&screen, &lines, index);
+            assert!(screen.is_char_boundary(offset));
+            assert!(screen[offset..].starts_with(line));
+        }
+        assert_eq!(
+            line_start_offset(&screen, &lines, lines.len()),
+            screen.len()
+        );
+        assert_eq!(
+            bottom_non_empty_lines(&screen, 2),
+            format!("────{separator}footer")
+        );
+        assert_eq!(bottom_lines(&screen, 2), format!("────{separator}footer"));
+    }
+    let screen = "α\r\n────\n\r\nfooter\r\n";
+    assert_eq!(bottom_non_empty_lines(screen, 2), "────\n\r\nfooter\r\n");
+    assert_eq!(bottom_non_empty_lines(screen, 1), "footer\r\n");
+    assert_eq!(bottom_non_empty_lines("", 2), "");
 }
