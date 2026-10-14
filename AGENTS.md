@@ -2,6 +2,19 @@
 
 Terminal based agent runtime for coding agents.
 
+## Skylled fork overrides
+
+These overrides apply in `Skylled/herdr` and take precedence over the inherited
+workflow instructions below. Keep the upstream text in place for future syncs.
+
+- Agents commit without proposing the message or waiting for alignment first.
+  Use lowercase conventional commits, with no emojis or AI co-author lines.
+- Kyle, not Can, owns review and merges in this fork. Agents never merge PRs.
+- Pushes and PRs require live Earshot grants. Request PRs through
+  `.earshot/pr.md` using the grant workflow, never `gh pr create`.
+- Wait for Greptile and CodeRabbit only when those bots are actually configured
+  on this fork.
+
 ## Scope and Audience
 
 These instructions are layered.
