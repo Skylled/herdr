@@ -1,0 +1,26 @@
+      ▄▀▀▄        Antigravity CLI 1.3.3
+     ▀▀▀▀▀▀       user@example.com (Google AI Pro)
+    ▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (Low)
+   ▄▀▀    ▀▀▄     /private/tmp/ql378-agy-capture
+  ▄▀▀      ▀▀▄
+
+────────────────────────────────────────────────────────────
+> Run the harmless shell command sleep 8 then printf QL378_OK. Do not read, edit, or create any
+  files.
+
+● Ran (sleep 8 && printf "QL378_OK") (ctrl+o to expand)
+
+Command
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+Requesting permission for:
+   sleep 8 && printf "QL378_OK"
+
+Run this command?
+> 1. Yes, run command
+  2. Yes, and always allow in this conversation for commands that start with 'sleep'
+  3. Yes, and always allow for commands that start with 'sleep' (Persist to settings.json)
+  4. No, cancel
+
+  ↑/↓ Navigate · tab Amend · ctrl+g edit/expand command
+esc to cancel                                                                 Gemini 3.8 Flash · low
