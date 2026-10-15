@@ -476,7 +476,68 @@ How the guest's server runs:
 | Sockets | `/Users/kyle/.config/herdr/herdr.sock` (API), `herdr-client.sock` |
 | Not | `groundctl`: it does not exist on the guest. It manages the host's services only |
 
-### Current: `0.9.1+fork.5` on the guest (QL-283), installed 2026-10-02
+### Current on disk: `0.9.1+fork.6` on the guest (QL-378), installed 2026-10-14
+
+Built in a fresh worktree at
+`/Users/kyle/Repos/herdr/.claude/worktrees/herdr-fork-6`, from fork master
+`433b80da20c22b62b45fe3b24b814a0aae76476c`. The rebase branch is an older
+ancestor; master is now the fork development line and GitHub default branch.
+No additional upstream commits were adopted.
+
+| | |
+|---|---|
+| Source commit built and installed | `6e06eb672e084263946a80d6dc6810d4a61ec0dd` (`chore: bump fork build to fork.6`) |
+| Label | `0.9.1+fork.6`; Cargo version remains `0.9.1` |
+| SHA-256 (release output and installed file) | `1a6aed86b4bbf260d1d9d4506938e6cf7e273828f9d8414e7c0579705c8172e7` |
+| SHA-1 (release output and installed file) | `a05e627861ce8512c3a4f9bc7795b515c320d989` |
+| Backup | `/Users/kyle/.local/bin/herdr.bak-2026-10-14-fork.5` |
+| Backup SHA-256 | `bc23aca34514cd8bc286d22a1d5e5e9d1ee90275664b01f2a1456555575c8021` |
+| Backup SHA-1 | `a793732739b87d9f1193719e19008d702e7b6e4b` |
+| Previous image | Reports `0.9.1+fork.5`, but its digest does not match the QL-283 install record; exact source unverified |
+| Install | Preserved dated backup; copied release output beside target as `herdr.new`, chmod 755, verified SHA-256, then atomic rename |
+| Runtime | **Not restarted or handed off.** PID 1186 still serves `0.9.1+fork.5`, private protocol 22 |
+
+Included patches: existing fork patches 1–3, 5–8 and subsequent fork detection
+fixes (PRs 2–5 and 7), plus [PR 8](https://github.com/Skylled/herdr/pull/8)
+(Muse/codex detection, QL-366), [PR 9](https://github.com/Skylled/herdr/pull/9)
+(Antigravity 1.3.3 rules, QL-378), and
+[PR 10](https://github.com/Skylled/herdr/pull/10) (fork agent workflow, QL-378).
+Patch 4 remains superseded and absent. The build commit also corrects integration
+test version assertions to compare API/status identity with the built CLI,
+rather than expecting the Cargo version without its fork label.
+
+Validation: `cargo build --release --locked` succeeded with Zig 0.16.0.
+`just check` passed formatting, all-target Clippy, 3,537 tests (6 skipped),
+144 Python maintenance tests, release workflow tests, architecture tests, and
+integration asset tests, then stopped because the guest has no Windows SDK at
+`~/.local/share/herdr/windows-cross/libc.txt`. `just docs-contract-test` passed
+separately (7 tests). No Windows validation is claimed. Native validation covers
+this macOS install; the only runtime change relative to fork master is the label.
+Temporary just/Bun tools and the guest's existing Python 3.13 were used; macOS's
+Python 3.9 cannot run the maintenance suite's `tomllib` imports.
+
+**Keep `~/.config/herdr/agent-detection/codex.toml`.** Upstream `9c96f7dd`
+(#4563) is not an ancestor of master or this build, and its Codex ambiguity
+engine change has not been adopted. The override was inspected and left intact.
+
+Guest launch was checked with `launchctl list`, plist inspection and `ps`:
+`gui/501/dev.skylled.guest.herdr`, plist
+`/Users/kyle/Library/LaunchAgents/dev.skylled.guest.herdr.plist`, runs
+`/Users/kyle/.local/bin/herdr server` with KeepAlive and RunAtLoad. The running
+process mapped the backed-up file inode 38452873 before the swap.
+
+**Kyle's step, from outside a Herdr pane:** there is no stop/start pair that
+preserves pane processes. Use the procedure's handoff instead:
+
+```sh
+/Users/kyle/.local/bin/herdr server live-handoff --import-exe /Users/kyle/.local/bin/herdr --expected-version 0.9.1+fork.6 --expected-protocol 22
+/Users/kyle/.local/bin/herdr status server
+```
+
+The launchd respawn caveat in [Installing](#installing) still applies. No server
+lifecycle command was run during this install.
+
+### Historical: `0.9.1+fork.5` on the guest (QL-283), installed 2026-10-02
 
 Kyle installed it on 2026-10-02 and it is live. QL-283 is closed. The prepared
 step-by-step is `/Users/kyle/Repos/herdr-install-steps.md` on the guest. Its
