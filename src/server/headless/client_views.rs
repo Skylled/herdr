@@ -9,6 +9,19 @@ pub(super) struct ShellFocusTarget {
     pub(super) pane_id: crate::layout::PaneId,
 }
 
+// Headless maintenance must not reflow a wider retained terminal or reset its
+// cell-pixel geometry when its row/column dimensions already satisfy the floor.
+fn grow_runtime_to_rect(runtime: &crate::terminal::TerminalRuntime, minimum: Rect) -> bool {
+    let (rows, cols) = runtime.current_size();
+    let next_rows = rows.max(minimum.height);
+    let next_cols = cols.max(minimum.width);
+    if (next_rows, next_cols) == (rows, cols) {
+        return false;
+    }
+    runtime.resize(next_rows, next_cols, 0, 0);
+    true
+}
+
 fn classify_shell_focus_transition<'a>(
     before: Option<&'a ShellFocusTarget>,
     after: Option<&'a ShellFocusTarget>,
@@ -607,6 +620,69 @@ impl HeadlessServer {
         true
     }
 
+    fn grow_headless_pane_geometry(&mut self) -> bool {
+        let area = Rect::new(0, 0, self.headless_size.0, self.headless_size.1);
+        let mut grew = false;
+        for (workspace_index, workspace) in self.app.state.workspaces.iter().enumerate() {
+            for (tab_index, tab) in workspace.tabs.iter().enumerate() {
+                let surface = crate::ui::compute_tab_surface_for(
+                    &self.app.state,
+                    &self.app.terminal_runtimes,
+                    Some(crate::ui::TabSurfaceTarget {
+                        workspace_index,
+                        tab_index,
+                    }),
+                    area,
+                    false,
+                    crate::kitty_graphics::HostCellSize::default(),
+                );
+                for info in surface.pane_infos {
+                    let Some(terminal_id) = tab.terminal_id(info.id) else {
+                        continue;
+                    };
+                    if self
+                        .app
+                        .state
+                        .direct_attach_resize_locks
+                        .contains(terminal_id)
+                    {
+                        continue;
+                    }
+                    if let Some(runtime) = self.app.state.runtime_for_pane_in_workspace(
+                        &self.app.terminal_runtimes,
+                        workspace_index,
+                        info.id,
+                    ) {
+                        grew |= grow_runtime_to_rect(runtime, info.inner_rect);
+                    }
+                }
+            }
+        }
+        if let Some(popup) = &self.app.state.popup_pane {
+            if !self
+                .app
+                .state
+                .direct_attach_resize_locks
+                .contains(&popup.terminal_id)
+            {
+                if let Some((runtime, geometry)) =
+                    self.app.terminal_runtimes.get(&popup.terminal_id).zip(
+                        crate::popup_size::resolve_popup_geometry(popup.width, popup.height, area),
+                    )
+                {
+                    grew |= grow_runtime_to_rect(runtime, geometry.inner);
+                }
+            }
+        }
+        let view_changed =
+            self.effective_size != self.headless_size || self.app.state.view.terminal_area != area;
+        self.effective_size = self.headless_size;
+        if grew || view_changed {
+            self.sync_runtime_view_geometry();
+        }
+        grew || view_changed
+    }
+
     pub(super) fn resize_tabs_for_only_shell_client(
         &mut self,
         start_pending_agent_resumes: bool,
@@ -619,17 +695,9 @@ impl HeadlessServer {
         if active_shell_count == 0 && !self.clients.values().any(ClientConnection::is_shell_client)
         {
             // Inactive shell surfaces remain attached (e.g. another selected
-            // machine) and retain their geometry. A genuinely detached final
-            // shell must not leave its width in live PTYs. Reuse
-            // headless geometry for all tabs and subsequent API-created panes;
-            // compute_view preserves terminals held by direct-attach locks.
-            self.effective_size = self.headless_size;
-            crate::ui::compute_view_with_runtime_registry(
-                &mut self.app.state,
-                &self.app.terminal_runtimes,
-                Rect::new(0, 0, self.headless_size.0, self.headless_size.1),
-            );
-            return true;
+            // machine). Only actual final disconnects may grow retained panes;
+            // wide desktops and inherited handoff PTYs must never shrink here.
+            return self.grow_headless_pane_geometry();
         }
         if active_shell_count != 1 {
             return false;
