@@ -1,7 +1,7 @@
 id = "codex"
-version = "2026.09.30.1"
+version = "2026.10.15.1"
 min_engine_version = 3
-updated_at = "2026-09-30T00:00:00Z"
+updated_at = "2026-10-15T00:00:00Z"
 
 [[rules]]
 id = "queued_question_working"
@@ -146,6 +146,10 @@ not = [
 # across the detection snapshot; stale controls can conservatively refuse idle.
 # The higher-priority guards also prevent the retained OSC idle rule from
 # bypassing these vetoes while this composer is visible.
+# QL-390: completed turns can leave background terminal tasks running and/or
+# show limit warnings above the composer, while newer versions add an optional
+# "? for shortcuts" footer line. Allow the shortcuts footer and wrapped model
+# lines. Vetoes preserve working and blocked states during active turns and dialogs.
 
 [[rules]]
 id = "live_prompt_blocked"
@@ -195,7 +199,7 @@ state = "idle"
 priority = 200
 region = "whole_recent"
 visible_idle = true
-regex = ['(?m)^›[ \t]+Ask Codex to do anything[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]{2,}[^›\r\n]+ · [^›\r\n]+(?:\r?\n[ \t]*)*\z']
+regex = ['(?m)^›[ \t]+Ask Codex to do anything[ \t]*\r?\n(?:[ \t]*\r?\n)*(?:[ \t]{2,}[^›\r\n]+\r?\n)*[ \t]{2,}[^›\r\n]* ·[ \t]*[^\r\n]*(?:\r?\n[ \t]{2,}[^\r\n]+)*(?:\r?\n[ \t]*\?[ \t]+for shortcuts\b[^\r\n]*)?(?:\r?\n[ \t]*)*\z']
 not = [
   { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
   { regex = ['(■|⬝){4,}'] },

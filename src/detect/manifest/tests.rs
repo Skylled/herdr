@@ -293,6 +293,127 @@ fn codex_queued_question_working_fixture() {
     }
 }
 
+fn codex_manifests() -> Vec<LoadedManifest> {
+    [
+        include_str!("../manifests/codex.toml"),
+        include_str!("../../../distribution/agent-detection/codex.toml"),
+    ]
+    .into_iter()
+    .map(|content| {
+        loaded_manifest(
+            parse_manifest(content).unwrap(),
+            ManifestSource::Bundled,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+    })
+    .collect()
+}
+
+// Quest Log QL-390: Codex CLI turns that finished with background terminals or
+// 5h limit lines above the composer and an optional "? for shortcuts" footer
+// must classify as idle, without false idle while working or blocked by dialogs.
+#[test]
+fn ql390_codex_background_terminal_idle_and_blockers() {
+    let base_prompt =
+        "› Ask Codex to do anything\n  GPT-6.1-Sol medium · ~/Repos/… · …\n  ? for shortcuts\n";
+    let base_screen = "\
+  Worked for 7m 52s • 2:10 PM
+  1 background terminal running · /ps to view · /stop to close
+                    ⚠ 5h limit: 14% left · resets at 6:10 PM · /status
+› Ask Codex to do anything
+  GPT-6.1-Sol medium · ~/Repos/… · …
+  ? for shortcuts
+";
+    for loaded in codex_manifests() {
+        // Idle variations: background terminals, limit warnings, clean finishes,
+        // CRLF, wrapped footers, and with/without shortcuts footer.
+        for screen in [
+            base_screen.to_string(),
+            base_screen.replace('\n', "\r\n"),
+            base_screen.replace("1 background terminal", "2 background terminals"),
+            base_screen.replace("1 background terminal", "12 background terminals"),
+            format!("  Worked for 7m 52s • 2:10 PM\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
+            format!("  Worked for 7m 52s • 2:10 PM\n⚠ 5h limit: 50% left · resets at 6:10 PM · /status\n{base_prompt}"),
+            format!("  Worked for 7m 52s • 2:10 PM\n{base_prompt}"),
+            base_prompt.to_string(),
+            "  Worked for 7m 52s • 2:10 PM\n  1 background terminal running · /ps to view · /stop to close\n› Ask Codex to do anything\n  model · /work\n".to_string(),
+            "  Worked for 7m 52s • 2:10 PM\n  1 background terminal running · /ps to view · /stop to close\n› Ask Codex to do anything\n  GPT-6.1-Sol medium ·\n  ~/Repos/… · …\n  ? for shortcuts\n".to_string(),
+            "  Worked for 7m 52s • 2:10 PM\n  1 background terminal running · /ps to view · /stop to close\n› Ask Codex to do anything\n  GPT-6.1-Sol medium\n  · ~/Repos/… · …\n  ? for shortcuts\n".to_string(),
+        ] {
+            let result = evaluate_loaded_manifest(
+                Agent::Codex,
+                DetectionInput {
+                    screen: &screen,
+                    osc_title: "",
+                    osc_progress: "",
+                },
+                loaded.clone(),
+                false,
+            );
+            assert_eq!(result.state, AgentState::Idle, "{screen:?}");
+            assert_eq!(
+                result.matched_rule.as_ref().map(|r| r.id.as_str()),
+                Some("live_prompt_box"),
+                "{screen:?}"
+            );
+            assert!(result.visible_idle, "{screen:?}");
+            assert!(!result.visible_working, "{screen:?}");
+            assert!(!result.visible_blocker, "{screen:?}");
+        }
+
+        // Active working turns must never be called idle.
+        for screen in [
+            format!("• Working (12s • esc to interrupt)\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
+            format!("Thinking (45s • esc to interrupt)\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
+            format!("Working (12s)\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
+            format!("• Queued follow-up inputs\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
+        ] {
+            let result = evaluate_loaded_manifest(
+                Agent::Codex,
+                DetectionInput {
+                    screen: &screen,
+                    osc_title: "",
+                    osc_progress: "",
+                },
+                loaded.clone(),
+                false,
+            );
+            assert_eq!(result.state, AgentState::Working, "{screen:?}");
+            assert!(result.visible_working, "{screen:?}");
+            assert!(!result.visible_idle, "{screen:?}");
+        }
+
+        // Approval dialogs must remain blocked.
+        for dialog in [
+            "Allow command?\ngit status\n  1. Yes, run command (y)\n  2. No, cancel (n)",
+            "Would you like to run the following command?",
+            "Proceed? [y/n]",
+            "Waiting for permission",
+            "esc to cancel",
+            "enter to select",
+            "Do you trust the contents of this directory?",
+        ] {
+            let screen = format!("{dialog}\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}");
+            let result = evaluate_loaded_manifest(
+                Agent::Codex,
+                DetectionInput {
+                    screen: &screen,
+                    osc_title: "",
+                    osc_progress: "",
+                },
+                loaded.clone(),
+                false,
+            );
+            assert_eq!(result.state, AgentState::Blocked, "{screen:?}");
+            assert!(result.visible_blocker, "{screen:?}");
+            assert!(!result.visible_idle, "{screen:?}");
+        }
+    }
+}
+
 // Quest Log QL-283 explicitly requests agy screen fixtures for this fork
 // regression: agy 1.2.14 draws a footer under its prompt box, which the
 // anchored idle rule did not allow. Captures are real; account emails are
