@@ -34,15 +34,16 @@ live; QL-283 is closed.
 | 9 | Codex 0.158 startup update chooser | #201 | `origin/master` (fork PR 3) | in `fork.5`, installed; shadowed by the VM codex override | bug report |
 | 10 | Codex queued questions during Working | #239 | `origin/master` (fork PR 4) | in `fork.5`, installed; shadowed by the VM codex override | bug report |
 | 11 | agy 1.2.14 prompt-box footer idle rule | QL-283 | `origin/master` (fork PR 5) | yes, `fork.5`, live | bug report |
-| 12 | Grow-only headless geometry; agy 1.3.5 width and file-access rules | QL-390 | `origin/master` (fork PR 14, `60f78b03`) | source merged; no installation claimed here | bug report |
-| 13 | Input-ready background tasks in agy and Claude; fork process override | QL-390 | fork PR 16, this branch | source only; not installed by this PR | Claude shell rule already removed upstream; agy bug report |
+| 12 | Grow-only headless geometry; agy 1.3.5 width and file-access rules | QL-390 | `origin/master` (fork PR 14, `60f78b03`) | yes, fork.8; also included in fork.9 | bug report |
+| 13 | Input-ready background tasks in agy and Claude; fork process override | QL-390 | `origin/master` (fork PR 16) | yes, fork.9 on disk; live handoff pending | Claude shell rule already removed upstream; agy bug report |
+| 14 | Live-handoff screen recovery and wrapped agy trust | QL-390 | `origin/master` (fork PR 18) | yes, fork.9 on disk; live handoff pending | bug report |
 
-The thirteen entries comprise eleven behavioural fixes (1, 2, 3, 5, 6, 9, 10,
-11, 12, 13, and the superseded 4), one fork-identity feature (7), and one
+The fourteen entries comprise twelve behavioural fixes (1, 2, 3, 5, 6, 9, 10,
+11, 12, 13, 14, and the superseded 4), one fork-identity feature (7), and one
 test-only commit (8). Entry 13 also carries fork process guidance. The older
-"build branch" records predate 2026-10-02; entries 12–13 record PRs 14 and 16.
+"build branch" records predate 2026-10-02; entries 12–14 record PRs 14, 16, and 18.
 **`origin/master` is now the build line**: it contains all of `codex/rebase-upstream-2026-09-21` plus fork PRs 2–5,
-and `fork.5` is built from it (see [Installed](#installed)). Fork PR 2
+and `fork.9` is built from its merged QL-390 fixes (see [Installed](#installed)). Fork PR 2
 (`139e4d84`, `c4320480`) also changed the agy, opencode and codex manifests. It
 has no row of its own; patch 11 builds on its agy rule.
 
@@ -561,7 +562,35 @@ Validation: 3,548 Rust tests passed (six skipped), native formatting/clippy,
 maintenance, integration, architecture, documentation, and manifest/catalog
 checks. Windows cross-lint is optional here because the SDK configuration is
 absent; no SDK was downloaded. Temporary detection overrides and disposable
-sessions were cleaned up. This PR does not build, install, or hand off Herdr.
+sessions were cleaned up. PR 16 did not build, install, or hand off Herdr; its
+changes are included in fork.9 below.
+
+### 14. Live-handoff screen recovery and wrapped agy trust — QL-390
+
+Fork PR 18 (merge `b053c92f`) carries the handoff and trust-dialog fixes.
+Live handoff now replays up to 8 KiB of recent primary-screen ANSI even for a
+pane with persisted agent-session metadata. The old exclusion could keep its
+process alive but leave `agent read --source visible` empty. The importer queues
+one app-safe resize nudge after committed ownership, without waiting for a TUI;
+normal client geometry changes use ordinary resizing. Nudge requests carry no
+caller-captured size: the PTY actor uses its last successfully applied geometry,
+so a concurrent or already-drained client resize cannot be reverted.
+
+Handoff does not transfer complete emulator state or full scrollback. Alternate
+screens depend on the application redrawing after resize/SIGWINCH. Earlier real
+Claude Code 2.1.300, Codex 0.162.1 and agy 1.3.5 disposable-session handoffs kept
+idle composers and wrapped unsent drafts intact; subsequent cursor edits worked.
+These captures predate the final actor-local geometry refinement, which has
+real-PTY tests for both resize orderings and full-suite coverage. No live server
+was handed off for those tests.
+
+The real agy 1.3.5 trust question wraps at 28 columns. Its question and trust/exit
+option gates now allow whitespace between wrapped words; the dialog is blocked
+at 28 and 56 columns while the ordinary composer remains idle. The bundled and
+published agy manifests are both `2026.10.15.4` and retain PR 16's background-task
+idle rules. Claude's PR 16 shell-only working-rule removal is also included.
+Private protocol remains 22. These patches are installed on disk in fork.9;
+server adoption remains Kyle's separate live-handoff step.
 
 ## Installed
 
@@ -586,7 +615,57 @@ How the guest's server runs:
 | Sockets | `/Users/kyle/.config/herdr/herdr.sock` (API), `herdr-client.sock` |
 | Not | `groundctl`: it does not exist on the guest. It manages the host's services only |
 
-### Current installed: `0.9.1+fork.8` on the guest (QL-390), installed 2026-10-15; live handoff pending
+### Current installed: `0.9.1+fork.9` on the guest (QL-390), installed 2026-10-15; live handoff pending
+
+Built in a fresh worktree at
+`/Users/kyle/Repos/herdr/.worktrees/herdr-fork-9`, branch
+`fix/herdr-fork-9`, from fork master `b053c92fe61effba3463f9468694614fa94b72d4`
+(PR 18 merge). This base contains PR 16's agy background-task idle and Claude
+shell-done rules, PR 18's wrapped agy trust and handoff redraw fixes, and PR 15's
+fork.8 build/install record. No additional upstream commits were adopted.
+The only source change from master is the fork build counter, from 8 to 9;
+Cargo version remains `0.9.1`.
+
+| | |
+|---|---|
+| Source commit built and installed | `c19e5201cd42b5c662da50d9150a826f53bb0e74` (`chore: bump fork build to fork.9`) |
+| Label / private protocol | `0.9.1+fork.9` / 22 (unchanged from fork.8) |
+| Release output | `/Users/kyle/Repos/herdr/.worktrees/herdr-fork-9/target/release/herdr` |
+| SHA-256 (release output) | `58111736bbfeab1fcfe8f1421e4b3addc5c9ce3ed09996995022456d42f981f2` |
+| SHA-256 (installed file) | `58111736bbfeab1fcfe8f1421e4b3addc5c9ce3ed09996995022456d42f981f2` |
+| SHA-1 (release output and installed file) | `47ad28466955b28f937397dd5e3374840aadc141` |
+| Installed path / size | `/Users/kyle/.local/bin/herdr`, 21,758,240 bytes |
+| Backup | `/Users/kyle/.local/bin/herdr.bak-2026-10-15-fork.8` |
+| Backup SHA-256 | `63a14cfaa0b1f528c559441c02b7ee7472210bb3c4ba1e8a842b923766f6fa49` |
+| Backup SHA-1 | `e6507a87c0828b092fcb08b05c892bfb8c2504b5` |
+| Previous image | Reports `0.9.1+fork.8`; both digests match the fork.8 install record |
+| Install | Exclusive dated backup, metadata preserved and digest verified; exclusive `herdr.new` staging, chmod 755, SHA-256 verified, atomic rename and installed digest verification |
+| Runtime | Installed CLI reports fork.9; read-only server status still reports `0.9.1+fork.8`, private protocol 22. No stop, restart or live handoff was performed |
+
+Validation: `just build` (`cargo build --release --locked`) succeeded with Zig
+0.16.0 from the source commit above. `just check` passed formatting, all-target
+Clippy and all 3,551 Rust tests (6 skipped), followed by 144 Python maintenance,
+5 release workflow, 6 architecture and 39 integration asset tests. The separate
+`just docs-contract-test` passed all 7 documentation tests: 201 non-Rust tests in
+total. Scratch copies of just and Bun plus installed Python 3.13 were used.
+Windows lint failed as expected because
+`~/.local/share/herdr/windows-cross/libc.txt` is absent; no SDK was downloaded
+and no Windows validation is claimed. The existing detection overrides were
+left untouched. All build/check command sessions finished before completion;
+no background agent terminals were started for this install.
+
+**Kyle must run this from a plain SSH shell outside Herdr after review/merge:**
+
+```sh
+/Users/kyle/.local/bin/herdr server live-handoff --import-exe /Users/kyle/.local/bin/herdr --expected-version 0.9.1+fork.9 --expected-protocol 22
+/Users/kyle/.local/bin/herdr status server
+```
+
+Protocol remains 22; there is no protocol change from fork.8. The launchd respawn
+caveat in [Installing](#installing) still applies. Fork.8 remains the running
+server until Kyle explicitly performs the handoff; fork.9 is installed on disk.
+
+### Historical: `0.9.1+fork.8` on the guest (QL-390), installed 2026-10-15, live by 2026-10-15
 
 Built in a fresh worktree at
 `/Users/kyle/Repos/herdr/.claude/worktrees/herdr-fork-8`, branch
@@ -640,8 +719,9 @@ existing Codex detection override was left untouched.
 ```
 
 Protocol 22 is unchanged from fork.7. The launchd respawn caveat in
-[Installing](#installing) still applies. Until Kyle performs the handoff,
-fork.7 remains the running server and fork.8 is installed on disk only.
+[Installing](#installing) still applies. At install time fork.7 was still running.
+A subsequent read-only check on 2026-10-15, before the fork.9 install, confirmed
+fork.8 serving protocol 22. The recording agent did not perform that handoff.
 
 ### Historical: `0.9.1+fork.7` on the guest (QL-390), installed 2026-10-15, live by 2026-10-15
 
