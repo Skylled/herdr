@@ -295,6 +295,41 @@ dialog and the trust dialog. Manifest `2026.09.17.3`.
 - **Not verified live:** no record of a real agy prompt box read through a
   server serving this rule. Do that before calling #104's idle half done.
 
+#### QL-390: Antigravity CLI 1.3.5 mode placeholders (2026-10-15)
+
+The 1.3.5 composer now shows `Auto mode: edits & safe commands auto-approved`,
+`Plan mode: research & plan only`, or `Accept-edits mode: file edits auto-approved`,
+each followed by `(shift+tab to cycle)`. The default mode still has an empty
+`>` line. `live_prompt_box` accepts those three exact alternatives plus the
+empty prompt; the frame, footer anchor, and all 20 existing not-gates remain
+unchanged. Bundled and published manifests move together to `2026.10.15.1`.
+
+Upstream was fetched and checked first at `916fcf8d`: the only post-base agy
+manifest change, `fabcab10` (#4959), has no `live_prompt_box` or placeholder fix.
+No cherry-pick applies. This branch starts from `origin/master` at `433b80da`.
+
+Live 1.3.5 detection-buffer reads in a disposable headless session reproduced
+Auto's old fallback (`matched_rule: null`, `visible_idle: false`). After isolated
+hot reload, Auto, Plan, Accept-edits, and the empty mode all selected
+`live_prompt_box` with `visible_idle: true`. A Gemini 3.8 Flash / low probe
+(`Reply with exactly QL-390-OK. Do not use tools.`) selected
+`cancel_footer_working` during the turn and returned to `live_prompt_box`.
+The startup trust dialog selected `folder_trust_dialog` / blocked.
+Evidence is under `/private/tmp/ql-390-repro/`; no global override was changed.
+The newly built `target/release/herdr` was then tested without the override:
+manifest source `bundled`, version `2026.10.15.1`, all four modes idle via
+`live_prompt_box`, and the same working/idle transition. Release SHA-256:
+`3e49c84f5a5a69d457b19e950fb85253e15c68570199f15689db07cf06c6fd8c`.
+
+Validation: 3,536 nextest tests passed, six skipped, and one existing fork-version
+assertion failed (`ping_over_socket_returns_version` expects Cargo's `0.9.1`,
+but the server reports `0.9.1+fork.5`). Both that test and `build_info.rs` are
+identical to `origin/master`. All 144 maintenance tests, manifest catalog
+validation, and `cargo fmt --check` passed. `just` is unavailable on this guest.
+
+The installed binary and main server were left untouched. This is a source
+patch only; Kyle cuts fork.7 and performs live handoff when installing.
+
 ### 7. `+fork.N` version label — Quest Log #86
 
 `c345b7c0` [was `1ad17cb6`] · `src/build_info.rs`, `src/release_notes.rs`,
