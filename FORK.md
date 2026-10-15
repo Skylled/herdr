@@ -34,11 +34,14 @@ live; QL-283 is closed.
 | 9 | Codex 0.158 startup update chooser | #201 | `origin/master` (fork PR 3) | in `fork.5`, installed; shadowed by the VM codex override | bug report |
 | 10 | Codex queued questions during Working | #239 | `origin/master` (fork PR 4) | in `fork.5`, installed; shadowed by the VM codex override | bug report |
 | 11 | agy 1.2.14 prompt-box footer idle rule | QL-283 | `origin/master` (fork PR 5) | yes, `fork.5`, live | bug report |
+| 12 | Grow-only headless geometry; agy 1.3.5 width and file-access rules | QL-390 | `origin/master` (fork PR 14, `60f78b03`) | source merged; no installation claimed here | bug report |
+| 13 | Input-ready background tasks in agy and Claude; fork process override | QL-390 | fork PR 16, this branch | source only; not installed by this PR | Claude shell rule already removed upstream; agy bug report |
 
-Eleven entries: nine behavioural fixes (1, 2, 3, 5, 6, 9, 10, 11, and the
-superseded 4), one fork-identity feature (7), one test-only commit (8). The
-"build branch" column predates 2026-10-02. **`origin/master` is now the build
-line**: it contains all of `codex/rebase-upstream-2026-09-21` plus fork PRs 2–5,
+The thirteen entries comprise eleven behavioural fixes (1, 2, 3, 5, 6, 9, 10,
+11, 12, 13, and the superseded 4), one fork-identity feature (7), and one
+test-only commit (8). Entry 13 also carries fork process guidance. The older
+"build branch" records predate 2026-10-02; entries 12–13 record PRs 14 and 16.
+**`origin/master` is now the build line**: it contains all of `codex/rebase-upstream-2026-09-21` plus fork PRs 2–5,
 and `fork.5` is built from it (see [Installed](#installed)). Fork PR 2
 (`139e4d84`, `c4320480`) also changed the agy, opencode and codex manifests. It
 has no row of its own; patch 11 builds on its agy rule.
@@ -487,6 +490,78 @@ visible idle.
   fresh agy 1.2.14 session read as answerable at its prompt, then as blocked on
   a permission prompt. Both correct.
 - **Upstream:** bug report, same reasoning as patches 5 and 6.
+
+### 12. Grow-only headless geometry and agy 1.3.5 controls — QL-390
+
+[Fork PR 14](https://github.com/Skylled/herdr/pull/14), merged as `60f78b03`,
+contains `3d8784de` (agy rules) and `f6c3bd61` (headless geometry).
+Detached/headless sessions retain their existing geometry and grow for larger
+clients instead of shrinking to a narrow fallback. The agy idle rule accepts
+width-truncated Auto, Plan, and Accept-edits placeholders. Its new file-access
+blocker requires the access question and both actionable Yes/No options, so an
+`esc to cancel` footer alone remains working rather than blocked. Bundled and
+published agy manifests advance together to `2026.10.15.2`.
+
+The PR includes narrow/wide captures and deterministic headless geometry tests.
+This entry records merged source; it does not establish which installed binary
+contains the patch or authorize a build, install, or live handoff.
+
+### 13. Input-ready background work and fork workflow — QL-390
+
+[Fork PR 16](https://github.com/Skylled/herdr/pull/16) updates agy's bundled and
+published manifest to `2026.10.15.3`: a completed turn can retain timestamped
+running-task rows between composer separators, optionally followed by the
+collapsed `↓ N more` summary. These screens accept input and now match visible
+idle. Spinner/cancel vetoes and blocked dialog rules remain unchanged.
+
+Claude's bundled and published manifest advances to `2026.10.15.1`, removing
+`background_shells_working`. A completion summary such as `✻ Cogitated for 2s ·
+done 1:21 PM · 1 shell still running`, or the status-bar `1 shell`, describes
+background work rather than an active turn. Title spinners, live-turn signals,
+background-agent/MCP-task rules, and blocked rules remain. The upstream remote
+Claude manifest `2026.10.11.1` already removes the shell-only rule; this focused
+patch preserves the fork's other dialog rules.
+
+This intentionally reverses QL-321's deliberate decision to report a completed
+turn as working while background shells linger. Claude queues typed input while
+busy, so sending the next message does not interrupt a running shell or lose the
+input. Once the foreground turn has finished, the input-ready composer is the
+right signal for Earshot; a lingering shell count must not indefinitely block
+that next message. Active foreground turns still match the higher-priority
+working signals, and permission dialogs still block input.
+
+Live smoke on installed Herdr `0.9.1+fork.8`, agy `1.3.5` (Gemini 3.8 Flash Low),
+and Claude Code `2.1.300` (Haiku 5.5 Low) used disposable named sessions and
+isolated config/state. Agy passed ordinary idle, one/two background rows,
+collapsed rows, a 41-column truncated Plan composer, active spinner/cancel,
+folder trust, and command permission states. Claude's `sleep 120 & wait` with
+`run_in_background=true` kept the shell alive: the old bundled rule reproduced
+working after completion; hot reload changed the same screen to visible idle,
+and a subsequent foreground turn still matched working. A bare `sleep 120 &`
+exits its parent shell immediately, so the additional `wait` is needed to retain
+a Claude background shell. No captured-agent classifier tests were added.
+
+`AGENTS.override.md` owns fork process rules independently of upstream
+`AGENTS.md`. Installed Codex `0.162.1`'s local `debug prompt-input` confirmed it
+selects the override instead of automatically loading the root AGENTS.md; the
+override explicitly requires reading upstream engineering guidance. The root
+`CLAUDE.md -> AGENTS.md` symlink is unchanged. A fork-owned `.claude/CLAUDE.md`
+imports `@../AGENTS.override.md`; Claude Code `2.1.300`'s startup debug log
+confirmed root instructions, that file, and the imported override load in order.
+
+Antigravity `1.3.5`'s embedded rule guide identifies both `AGENTS.md` and
+`GEMINI.md` as automatically discovered directory rules; `AGENTS.override.md`
+is not a discovered filename. The fork-owned `GEMINI.md` therefore directs agy
+to read upstream AGENTS.md first and the shared process override second. The
+local `/context` check ran without a model turn (zero user-message/response
+tokens); it reports usage, not loaded rule paths, so rule-file discovery is
+verified against the installed guide rather than a model's self-report.
+
+Validation: 3,548 Rust tests passed (six skipped), native formatting/clippy,
+maintenance, integration, architecture, documentation, and manifest/catalog
+checks. Windows cross-lint is optional here because the SDK configuration is
+absent; no SDK was downloaded. Temporary detection overrides and disposable
+sessions were cleaned up. This PR does not build, install, or hand off Herdr.
 
 ## Installed
 
