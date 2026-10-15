@@ -83,15 +83,10 @@ impl HeadlessServer {
                 continue;
             };
             let mut handoff_runtime = runtime.handoff_runtime_state(pane_id);
-            let has_agent_session = self
-                .app
-                .state
-                .terminals
-                .get(terminal_id)
-                .is_some_and(|terminal| terminal.persisted_agent_session.is_some());
-            if !has_agent_session {
-                handoff_runtime.initial_history_ansi = runtime.handoff_history_ansi();
-            }
+            // A live handoff keeps the existing process; native session resume
+            // is not involved. Idle agents need the same primary-screen replay
+            // as shells, even when they have a persisted session identity.
+            handoff_runtime.initial_history_ansi = runtime.handoff_history_ansi();
             handoff_entries.push((terminal_id.clone(), handoff_runtime));
         }
 
@@ -280,19 +275,6 @@ impl HeadlessServer {
         let _ = std::fs::remove_file(socket_path);
     }
 
-    #[cfg(unix)]
-    pub(super) fn nudge_handoff_panes_on_first_client_attach(&mut self) {
-        if !self.pending_handoff_repaint_nudge {
-            return;
-        }
-        self.pending_handoff_repaint_nudge = false;
-        self.app
-            .terminal_runtimes
-            .nudge_child_redraw_after_handoff();
-    }
-
-    #[cfg(not(unix))]
-    pub(super) fn nudge_handoff_panes_on_first_client_attach(&mut self) {}
     /// Initiates graceful shutdown.
     pub(super) fn initiate_shutdown(&mut self) {
         if self.shutting_down {

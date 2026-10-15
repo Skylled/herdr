@@ -1,5 +1,5 @@
 id = "agy"
-version = "2026.10.15.3"
+version = "2026.10.15.4"
 min_engine_version = 1
 updated_at = "2026-10-15T00:00:00Z"
 aliases = ["antigravity", "antigravity-cli"]
@@ -50,10 +50,11 @@ visible_blocker = true
 # agy's startup modal: it cannot proceed without a keypress, so the pane is
 # blocked, not idle. Gate on the question, then confirm the option list is
 # really on screen so prose that merely mentions the modal cannot match.
-contains = ["do you trust the contents of this project?"]
+# QL-390: captured on 1.3.5 at 28 columns; words wrap onto new rows.
+regex = ['(?i)do\s+you\s+trust\s+the\s+contents\s+of\s+this\s+project\?']
 any = [
-  { contains = ["yes, i trust this folder"] },
-  { contains = ["no, exit"] },
+  { regex = ['(?i)yes,\s+i\s+trust\s+this\s+folder'] },
+  { regex = ['(?i)no,\s+exit'] },
 ]
 
 # QL-390: 1.3.5 file access uses a cancel footer, also used while working.

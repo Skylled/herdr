@@ -1415,6 +1415,59 @@ fn live_handoff_accepts_canonical_pane_id_from_child_env() {
     cleanup_test_base(&base);
 }
 
+// No TUI client attaches before or after this handoff. The existing process
+// emits nothing after its initial alternate-screen frame until SIGWINCH.
+#[test]
+fn live_handoff_redraws_idle_alternate_screen_without_client_attach() {
+    let _lock = test_lock();
+    let base = unique_test_dir();
+    let config_home = base.join("config");
+    let runtime_dir = base.join("runtime");
+    let api_socket = runtime_dir.join("herdr.sock");
+    fs::create_dir_all(&base).unwrap();
+    let app = base.join("idle-screen.py");
+    fs::write(
+        &app,
+        "import signal, time\ndef redraw(*args):\n    print('\\x1b[2J\\x1b[Hredrawn-after-handoff', end='', flush=True)\nsignal.signal(signal.SIGWINCH, redraw)\nprint('\\x1b[?1049h\\x1b[Hidle-frame-before', end='', flush=True)\nwhile True: time.sleep(1)\n",
+    )
+    .unwrap();
+    let spawned = spawn_server(&config_home, &runtime_dir, &api_socket);
+    wait_for_socket(&api_socket, Duration::from_secs(10));
+    register_runtime_dir(&runtime_dir);
+    let created = request(
+        &api_socket,
+        serde_json::json!({
+            "id": "test:workspace:create", "method": "workspace.create",
+            "params": {"cwd": base, "focus": true}
+        }),
+    );
+    assert_ok(created.clone());
+    let pane_id = created["result"]["root_pane"]["pane_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_ok(request(
+        &api_socket,
+        serde_json::json!({
+            "id": "test:idle-app", "method": "pane.send_input",
+            "params": {"pane_id": pane_id, "text": format!("python3 {}", app.display()), "keys": ["Enter"]}
+        }),
+    ));
+    wait_for_output(&api_socket, &pane_id, "idle-frame-before");
+    assert_ok(request(
+        &api_socket,
+        serde_json::json!({"id":"test:handoff","method":"server.live_handoff","params":{}}),
+    ));
+    drop(spawned);
+    wait_for_api(&api_socket, Duration::from_secs(10));
+    wait_for_output(&api_socket, &pane_id, "redrawn-after-handoff");
+    let _ = request(
+        &api_socket,
+        serde_json::json!({"id":"test:stop","method":"server.stop","params":{}}),
+    );
+    cleanup_test_base(&base);
+}
+
 #[test]
 fn live_handoff_keeps_unmanaged_agent_name_bound_to_saved_session() {
     use std::os::unix::fs::PermissionsExt;
@@ -1432,7 +1485,7 @@ fn live_handoff_keeps_unmanaged_agent_name_bound_to_saved_session() {
     fs::write(
         &fake_pi,
         format!(
-            "#!/bin/sh\nexport HERDR_AGENT=pi\necho started > {}\n/bin/sleep 30\n:\n",
+            "#!/bin/sh\nexport HERDR_AGENT=pi\nprintf idle-agent-frame\necho started > {}\n/bin/sleep 30\n:\n",
             started_marker.display()
         ),
     )
@@ -1521,12 +1574,15 @@ fn live_handoff_keeps_unmanaged_agent_name_bound_to_saved_session() {
         }),
     ));
 
+    wait_for_output(&api_socket, &pane_id, "idle-agent-frame");
+
     assert_ok(request(
         &api_socket,
         serde_json::json!({"id":"test:handoff","method":"server.live_handoff","params":{}}),
     ));
     drop(spawned);
     wait_for_api(&api_socket, Duration::from_secs(10));
+    wait_for_output(&api_socket, &pane_id, "idle-agent-frame");
 
     assert_ok(request(
         &api_socket,
