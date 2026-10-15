@@ -1,7 +1,7 @@
 id = "agy"
-version = "2026.10.14.1"
+version = "2026.10.15.1"
 min_engine_version = 1
-updated_at = "2026-10-14T00:00:00Z"
+updated_at = "2026-10-15T00:00:00Z"
 aliases = ["antigravity", "antigravity-cli"]
 
 # QL-378: the cached 2026.10.05.1 catalog lacks idle detection entirely.
@@ -90,7 +90,8 @@ region = "whole_recent"
 visible_idle = true
 # Based on agy 1.2.1/1.2.14 captures (QL-283), and real 1.3.3 captures
 # (QL-378). A verbosity notice ABOVE the box is ordinary transcript content.
-# agy's prompt box: an empty prompt line (">") framed by two horizontal rules
+# QL-390: agy 1.3.5 adds mode placeholders; its default mode stays empty.
+# Accept only the three observed placeholders or an empty prompt, framed by rules
 # (at least 20 box-drawing characters). agy 1.2.14 adds one status line under
 # the box, starting "? for shortcuts" and ending with the model; older versions
 # end at the bottom rule. 1.3.3 can replace the shortcut hint with the cached
@@ -103,7 +104,7 @@ visible_idle = true
 # its approval titles ("Run this command?", "Allow access to this URL?",
 # "Allow calling this tool?"); their option labels are vetoed as well.
 # Use the detection snapshot so vetoes above the last ten lines still apply.
-regex = ['(?m)^[ \t]*─{20,}[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*>[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*─{20,}[ \t]*(?:\r?\n[ \t]*(?:\?[ \t]+for shortcuts\b|Global config\.json no(?:t found\.|\.{3}))[^\r\n]*)?(?:\r?\n[ \t]*)*\z']
+regex = ['(?m)^[ \t]*─{20,}[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*>[ \t]*(?:(?:Auto mode: edits & safe commands auto-approved|Plan mode: research & plan only|Accept-edits mode: file edits auto-approved) \(shift\+tab to cycle\)[ \t]*)?\r?\n(?:[ \t]*\r?\n)*[ \t]*─{20,}[ \t]*(?:\r?\n[ \t]*(?:\?[ \t]+for shortcuts\b|Global config\.json no(?:t found\.|\.{3}))[^\r\n]*)?(?:\r?\n[ \t]*)*\z']
 not = [
   { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
   { regex = ['(?i-u:\b(?:esc|ctrl\+c)(?:\s+again)?(?:\s+to)?\s+interrupt\b)'] },
