@@ -596,6 +596,102 @@ fn agy_1_3_3_captured_states_and_idle_vetoes() {
     }
 }
 
+// QL-390 explicitly requests real narrow/wide screen regressions in this fork.
+#[test]
+fn agy_1_3_5_mode_prompts_survive_narrow_clients() {
+    let captures = [
+        include_str!("../fixtures/agy-1.3.5/idle-mode0-60.txt"),
+        include_str!("../fixtures/agy-1.3.5/idle-mode1-60.txt"),
+        include_str!("../fixtures/agy-1.3.5/idle-mode2-60.txt"),
+        include_str!("../fixtures/agy-1.3.5/idle-mode3-60.txt"),
+        include_str!("../fixtures/agy-1.3.5/idle-mode0-100.txt"),
+        include_str!("../fixtures/agy-1.3.5/idle-mode1-100.txt"),
+        include_str!("../fixtures/agy-1.3.5/idle-mode2-100.txt"),
+        include_str!("../fixtures/agy-1.3.5/idle-mode3-100.txt"),
+    ];
+    for loaded in agy_manifests() {
+        for capture in captures {
+            for screen in [capture.to_string(), capture.replace('\n', "\r\n")] {
+                let result = explain_agy(&loaded, &screen);
+                assert_eq!(result.state, AgentState::Idle, "{screen:?}");
+                assert!(result.visible_idle, "{screen:?}");
+                assert!(result.fallback_reason.is_none());
+            }
+            for screen in [
+                format!("⠋  Thinking...\n{capture}"),
+                capture.replace("? for shortcuts", "esc to cancel"),
+                capture.replace("? for shortcuts", "· 1 task"),
+                format!("{capture}typed below the composer"),
+            ] {
+                assert!(!explain_agy(&loaded, &screen).visible_idle, "{screen:?}");
+            }
+        }
+        let default = captures[2];
+        for draft in [
+            "some typed input",
+            "Auto pilot",
+            "Plan something",
+            "Accept-edits draft",
+        ] {
+            assert!(
+                !explain_agy(
+                    &loaded,
+                    &default.replace("\n>\n", &format!("\n> {draft}\n"))
+                )
+                .visible_idle
+            );
+        }
+    }
+}
+
+#[test]
+fn agy_1_3_5_file_and_command_approvals_are_blocked() {
+    let file = include_str!("../fixtures/agy-1.3.5/file-access-60.txt");
+    let wide_file = include_str!("../fixtures/agy-1.3.5/file-access-100.txt");
+    let command = include_str!("../fixtures/agy-1.3.5/command-100.txt");
+    let narrow_command = include_str!("../fixtures/agy-1.3.5/command-60.txt");
+    // Derived variant for the two-option dialog reported in QL-390.
+    let two_options = file
+        .replace("  2. Yes, and always allow non-workspace access\n", "")
+        .replace("3. No, deny access", "2. No, deny access");
+    for loaded in agy_manifests() {
+        for capture in [
+            file,
+            wide_file,
+            command,
+            narrow_command,
+            two_options.as_str(),
+        ] {
+            for screen in [capture.to_string(), capture.replace('\n', "\r\n")] {
+                let result = explain_agy(&loaded, &screen);
+                assert_eq!(result.state, AgentState::Blocked, "{screen:?}");
+                assert!(result.visible_blocker);
+                assert!(!result.visible_idle);
+                assert!(!result.visible_working);
+                assert!(result.fallback_reason.is_none());
+            }
+        }
+        // Highlight can move to any option without losing blocked detection.
+        let deny_selected = file.replace("> 1.", "  1.").replace("  3.", "> 3.");
+        assert!(explain_agy(&loaded, &deny_selected).visible_blocker);
+        for screen in [
+            file.replace("Allow access to this file?", "Read finished"),
+            file.replace("Yes, allow access", "Earlier approval"),
+            file.replace("No, deny access", "Earlier denial"),
+            file.replace("esc to cancel", "? for shortcuts"),
+            "Allow access to this file? Yes, allow access. No, deny access. esc to cancel"
+                .to_string(),
+        ] {
+            assert!(!explain_agy(&loaded, &screen).visible_blocker, "{screen:?}");
+        }
+        // An ordinary working cancel footer must not become blocked.
+        let result = explain_agy(&loaded, "Processing file access...\nesc to cancel");
+        assert_eq!(result.state, AgentState::Working);
+        assert!(result.visible_working);
+        assert!(!result.visible_blocker);
+    }
+}
+
 #[test]
 fn agy_bundled_and_published_fix_supersedes_the_idleless_remote_cache() {
     let bundled = include_str!("../manifests/antigravity.toml");

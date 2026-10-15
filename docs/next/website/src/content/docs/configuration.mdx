@@ -62,7 +62,7 @@ headless_cols = 160
 headless_rows = 50
 ```
 
-With one attached client, all tabs follow its size. With multiple clients, each viewed tab follows the client that most recently focused, selected, or interacted with it. When all but one client detach, all tabs immediately return to the remaining client's size. When no clients remain, existing pane PTYs retain their last size and new headless layout uses the configured fallback.
+With one attached client, all tabs follow its size. With multiple clients, each viewed tab follows the client that most recently focused, selected, or interacted with it. When all but one client detach, all tabs immediately return to the remaining client's size. When the last Herdr client detaches, existing panes (including background tabs) grow to at least their allocation in the configured headless layout. Neither width nor height shrinks; wider terminals retain their size. Newly created panes use the headless layout too. A directly attached terminal keeps its own size until that attachment ends.
 
 ## Terminal defaults
 

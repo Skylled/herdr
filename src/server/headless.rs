@@ -921,6 +921,9 @@ impl HeadlessServer {
         self.server_config_diagnostic_without_keybindings =
             server_config_diagnostic_without_keybindings;
         self.sync_foreground_client_state();
+        if !self.has_app_client() {
+            self.resize_tabs_for_only_shell_client(false);
+        }
         report
     }
 

@@ -1,0 +1,13 @@
+File access
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+Read: /Users/kyle/Repos/herdr/Cargo.toml
+Reason: outside workspace
+
+Allow access to this file?
+> 1. Yes, allow access
+  2. Yes, and always allow non-workspace access
+  3. No, deny access
+
+  ↑/↓ Navigate
+esc to cancel                                                                Gemini 3.8 Flash · high
