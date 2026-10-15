@@ -630,7 +630,7 @@ fn pane_created_after_detach_uses_configured_headless_size() {
     wait_for_socket(&client_socket, Duration::from_secs(10));
 
     let mut stream = UnixStream::connect(&client_socket).expect("client should connect");
-    let (version, error) = client_shell_handshake(&mut stream, CURRENT_PROTOCOL, 160, 50)
+    let (version, error) = client_shell_handshake(&mut stream, CURRENT_PROTOCOL, 60, 24)
         .expect("handshake should succeed");
     assert_eq!(version, CURRENT_PROTOCOL);
     assert!(error.is_none(), "{error:?}");
@@ -648,7 +648,7 @@ fn pane_created_after_detach_uses_configured_headless_size() {
         "ATTACHED_SIZE",
         Duration::from_secs(5),
     );
-    assert_eq!(attached_size, (50, 160));
+    assert_eq!(attached_size, (24, 60));
 
     send_detach(&mut stream).expect("send detach");
     assert!(
@@ -668,21 +668,21 @@ fn pane_created_after_detach_uses_configured_headless_size() {
         "HEADLESS_SIZE_AFTER_DETACH",
         Duration::from_secs(5),
     );
-    let preserved_size = read_pane_tty_size_after_marker(
+    let restored_size = read_pane_tty_size_after_marker(
         &api_socket,
         &first_pane_id,
-        "PRESERVED_SIZE_AFTER_DETACH",
+        "RESTORED_SIZE_AFTER_DETACH",
         Duration::from_secs(5),
     );
 
     assert_eq!(headless_size, (41, 132));
-    assert_eq!(preserved_size, attached_size);
+    assert_eq!(restored_size, (41, 132));
 
     cleanup_spawned_herdr(spawned, base);
 }
 
 #[test]
-fn detached_output_preserves_last_attached_pty_size() {
+fn detached_output_uses_default_headless_pty_size() {
     let _lock = test_lock();
     let base = unique_test_dir();
     let config_home = base.join("config");
@@ -690,12 +690,18 @@ fn detached_output_preserves_last_attached_pty_size() {
     let api_socket = runtime_dir.join("herdr.sock");
     let client_socket = runtime_dir.join("herdr-client.sock");
 
-    let spawned = spawn_server(&config_home, &runtime_dir, &api_socket, &client_socket);
+    let spawned = spawn_server_with_config(
+        &config_home,
+        &runtime_dir,
+        &api_socket,
+        &client_socket,
+        "onboarding = false\n[ui]\npane_scrollbars = false\n",
+    );
     wait_for_socket(&api_socket, Duration::from_secs(10));
     wait_for_socket(&client_socket, Duration::from_secs(10));
 
     let mut stream = UnixStream::connect(&client_socket).expect("client should connect");
-    let (version, error) = client_shell_handshake(&mut stream, CURRENT_PROTOCOL, 120, 40)
+    let (version, error) = client_shell_handshake(&mut stream, CURRENT_PROTOCOL, 60, 24)
         .expect("handshake should succeed");
     assert_eq!(version, CURRENT_PROTOCOL);
     assert!(error.is_none(), "{:?}", error);
@@ -714,7 +720,9 @@ fn detached_output_preserves_last_attached_pty_size() {
         Duration::from_secs(5),
     );
 
+    assert_eq!(before, (24, 60));
     send_detach(&mut stream).expect("send detach");
+    assert!(wait_for_disconnect(&mut stream, Duration::from_secs(2)).unwrap());
     drop(stream);
 
     assert!(
@@ -732,8 +740,9 @@ fn detached_output_preserves_last_attached_pty_size() {
     );
 
     assert_eq!(
-        while_detached, before,
-        "detached renders should not resize live pane PTYs to a fallback size"
+        while_detached,
+        (40, 120),
+        "detached panes should return to the default headless size"
     );
 
     cleanup_spawned_herdr(spawned, base);

@@ -616,6 +616,21 @@ impl HeadlessServer {
             .values()
             .filter(|client| client.is_active_shell_client() && client.writer.is_some())
             .count();
+        if active_shell_count == 0 && !self.clients.values().any(ClientConnection::is_shell_client)
+        {
+            // Inactive shell surfaces remain attached (e.g. another selected
+            // machine) and retain their geometry. A genuinely detached final
+            // shell must not leave its width in live PTYs. Reuse
+            // headless geometry for all tabs and subsequent API-created panes;
+            // compute_view preserves terminals held by direct-attach locks.
+            self.effective_size = self.headless_size;
+            crate::ui::compute_view_with_runtime_registry(
+                &mut self.app.state,
+                &self.app.terminal_runtimes,
+                Rect::new(0, 0, self.headless_size.0, self.headless_size.1),
+            );
+            return true;
+        }
         if active_shell_count != 1 {
             return false;
         }

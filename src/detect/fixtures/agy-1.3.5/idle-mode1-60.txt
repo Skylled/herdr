@@ -1,0 +1,4 @@
+────────────────────────────────────────────────────────────
+> Plan mode: research & plan only (shift+tab to cycle)
+────────────────────────────────────────────────────────────
+? for shortcuts               plan · Gemini 3.8 Flash · high

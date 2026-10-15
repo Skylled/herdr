@@ -1,5 +1,7 @@
 use super::*;
 
+mod headless_geometry;
+
 #[path = "pane_graphics.rs"]
 mod pane_graphics_tests;
 #[path = "pane_move.rs"]

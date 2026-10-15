@@ -1,0 +1,4 @@
+────────────────────────────────────────────────────────────
+> Accept-edits mode: file edits auto-approved (shift+tab...
+────────────────────────────────────────────────────────────
+? for shortcuts       accept-edits · Gemini 3.8 Flash · high
