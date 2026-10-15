@@ -312,36 +312,65 @@ fn codex_manifests() -> Vec<LoadedManifest> {
     .collect()
 }
 
-// Quest Log QL-390: Codex CLI turns that finished with background terminals or
-// 5h limit lines above the composer and an optional "? for shortcuts" footer
-// must classify as idle, without false idle while working or blocked by dialogs.
+// Quest Log QL-390: idle Codex screens with completed turns can show a
+// "? for shortcuts" footer line below the model/cwd footer, which may also carry
+// a trailing status such as "⚠ N warning(s) · f2 to view". Background terminals
+// and 5h limit warnings above the composer must not block idle, while over-matches
+// (indented choice options, navigation footers, paste placeholders, extra output,
+// active working turns, and approval dialogs) must never be called idle.
 #[test]
 fn ql390_codex_background_terminal_idle_and_blockers() {
-    let base_prompt =
-        "› Ask Codex to do anything\n  GPT-6.1-Sol medium · ~/Repos/… · …\n  ? for shortcuts\n";
-    let base_screen = "\
-  Worked for 7m 52s • 2:10 PM
+    let capture_120_cols = "\
   1 background terminal running · /ps to view · /stop to close
-                    ⚠ 5h limit: 14% left · resets at 6:10 PM · /status
+
+                                    ⚠ 5h limit: 14% left · resets at 6:10 PM · /status
+
 › Ask Codex to do anything
-  GPT-6.1-Sol medium · ~/Repos/… · …
-  ? for shortcuts
+
+  GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/ql-390-herdr-handoff-redraw-agy-7dc87103 · Read fleet and quest guidanc…
+  ? for shortcuts                                                                             ⚠ 2 warnings · f2 to view
 ";
+
+    let capture_60_cols = "\
+  1 background terminal running · /ps to view · /stop to close
+
+  ⚠ 5h limit: 14% left · resets at 6:10 PM · /status
+
+› Ask Codex to do anything
+
+  GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/
+  ql-390-herdr-handoff-redraw-agy-7dc87103 · Read fleet and qu…
+  ? for shortcuts              ⚠ 2 warnings · f2 to view
+";
+
+    let capture_60_cols_wrapped_at_dot = "\
+  1 background terminal running · /ps to view · /stop to close
+
+  ⚠ 5h limit: 14% left · resets at 6:10 PM · /status
+
+› Ask Codex to do anything
+
+  GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/ql-390-7dc87103
+  · Read fleet and quest guidance…
+  ? for shortcuts              ⚠ 2 warnings · f2 to view
+";
+
     for loaded in codex_manifests() {
-        // Idle variations: background terminals, limit warnings, clean finishes,
-        // CRLF, wrapped footers, and with/without shortcuts footer.
+        // Positive tests: exact 120-col and 60-col captures, background terminals,
+        // limit warnings, clean finishes, CRLF, wrapped footers, with/without shortcuts/warnings.
         for screen in [
-            base_screen.to_string(),
-            base_screen.replace('\n', "\r\n"),
-            base_screen.replace("1 background terminal", "2 background terminals"),
-            base_screen.replace("1 background terminal", "12 background terminals"),
-            format!("  Worked for 7m 52s • 2:10 PM\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
-            format!("  Worked for 7m 52s • 2:10 PM\n⚠ 5h limit: 50% left · resets at 6:10 PM · /status\n{base_prompt}"),
-            format!("  Worked for 7m 52s • 2:10 PM\n{base_prompt}"),
-            base_prompt.to_string(),
+            capture_120_cols.to_string(),
+            capture_120_cols.replace('\n', "\r\n"),
+            capture_60_cols.to_string(),
+            capture_60_cols.replace('\n', "\r\n"),
+            capture_60_cols_wrapped_at_dot.to_string(),
+            capture_120_cols.replace("1 background terminal", "2 background terminals"),
+            capture_120_cols.replace("1 background terminal", "12 background terminals"),
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n".to_string(),
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  ? for shortcuts\n".to_string(),
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/\n  ql-390-herdr-handoff-redraw-agy-7dc87103\n".to_string(),
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/\n  ql-390-herdr-handoff-redraw-agy-7dc87103\n  ? for shortcuts\n".to_string(),
             "  Worked for 7m 52s • 2:10 PM\n  1 background terminal running · /ps to view · /stop to close\n› Ask Codex to do anything\n  model · /work\n".to_string(),
-            "  Worked for 7m 52s • 2:10 PM\n  1 background terminal running · /ps to view · /stop to close\n› Ask Codex to do anything\n  GPT-6.1-Sol medium ·\n  ~/Repos/… · …\n  ? for shortcuts\n".to_string(),
-            "  Worked for 7m 52s • 2:10 PM\n  1 background terminal running · /ps to view · /stop to close\n› Ask Codex to do anything\n  GPT-6.1-Sol medium\n  · ~/Repos/… · …\n  ? for shortcuts\n".to_string(),
         ] {
             let result = evaluate_loaded_manifest(
                 Agent::Codex,
@@ -364,12 +393,53 @@ fn ql390_codex_background_terminal_idle_and_blockers() {
             assert!(!result.visible_blocker, "{screen:?}");
         }
 
+        // Negative tests for each over-match: indented options, navigation footers,
+        // paste placeholders, and extra output must never match live_prompt_box or be visible_idle.
+        for screen in [
+            // Indented › 1. Yes / 2. No options
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n    › 1. Yes\n    2. No\n",
+            // Indented options with navigation footer
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n    › 1. Yes\n    2. No\n  ↑↓ navigate · enter select · esc close\n",
+            // Standalone "↑↓ navigate · enter select · esc close" footer
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  ↑↓ navigate · enter select · esc close\n",
+            // Navigation footer variant without arrows
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  navigate · enter select · esc close\n",
+            // Paste placeholder below composer
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  [Pasted text #1: 12 lines]\n",
+            // Paste placeholder inside composer
+            "› Ask Codex to do anything\n  [Pasted text #1: 12 lines]\n  GPT-6.1-Sol medium · ~/Repos/herdr\n",
+            // Extra output after model footer (2 lines)
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  extra output line 1\n  extra output line 2\n",
+            // Extra output after model footer (3 lines)
+            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  Compiling herdr v0.1.0\n  Finished dev [unoptimized] target(s)\n  Running unittests\n",
+        ] {
+            let result = evaluate_loaded_manifest(
+                Agent::Codex,
+                DetectionInput {
+                    screen,
+                    osc_title: "",
+                    osc_progress: "",
+                },
+                loaded.clone(),
+                false,
+            );
+            assert_ne!(
+                result.matched_rule.as_ref().map(|r| r.id.as_str()),
+                Some("live_prompt_box"),
+                "over-match should not trigger live_prompt_box: {screen:?}"
+            );
+            assert!(
+                !result.visible_idle,
+                "over-match must not be visible_idle: {screen:?}"
+            );
+        }
+
         // Active working turns must never be called idle.
         for screen in [
-            format!("• Working (12s • esc to interrupt)\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
-            format!("Thinking (45s • esc to interrupt)\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
-            format!("Working (12s)\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
-            format!("• Queued follow-up inputs\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}"),
+            format!("• Working (12s • esc to interrupt)\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}"),
+            format!("Thinking (45s • esc to interrupt)\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}"),
+            format!("Working (12s)\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}"),
+            format!("• Queued follow-up inputs\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}"),
         ] {
             let result = evaluate_loaded_manifest(
                 Agent::Codex,
@@ -394,9 +464,11 @@ fn ql390_codex_background_terminal_idle_and_blockers() {
             "Waiting for permission",
             "esc to cancel",
             "enter to select",
+            "enter select",
+            "esc close",
             "Do you trust the contents of this directory?",
         ] {
-            let screen = format!("{dialog}\n  1 background terminal running · /ps to view · /stop to close\n{base_prompt}");
+            let screen = format!("{dialog}\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}");
             let result = evaluate_loaded_manifest(
                 Agent::Codex,
                 DetectionInput {

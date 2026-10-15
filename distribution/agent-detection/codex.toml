@@ -146,10 +146,11 @@ not = [
 # across the detection snapshot; stale controls can conservatively refuse idle.
 # The higher-priority guards also prevent the retained OSC idle rule from
 # bypassing these vetoes while this composer is visible.
-# QL-390: completed turns can leave background terminal tasks running and/or
-# show limit warnings above the composer, while newer versions add an optional
-# "? for shortcuts" footer line. Allow the shortcuts footer and wrapped model
-# lines. Vetoes preserve working and blocked states during active turns and dialogs.
+# QL-390: idle Codex screens with completed turns can show a "? for shortcuts"
+# footer line below the model/cwd footer, which may also carry a trailing
+# status such as "⚠ N warning(s) · f2 to view". Allow at most one wrapped
+# continuation line after the model/cwd line, and optionally this shortcuts/warnings
+# footer line. Vetoes preserve working and blocked states during active turns and dialogs.
 
 [[rules]]
 id = "live_prompt_blocked"
@@ -163,6 +164,8 @@ any = [
   { contains = ["press enter to confirm"] },
   { contains = ["esc to cancel"] },
   { contains = ["enter to select"] },
+  { contains = ["enter select"] },
+  { contains = ["esc close"] },
   { contains = ["allow command?"] },
   { contains = ["do you want to"] },
   { contains = ["would you like to"] },
@@ -199,7 +202,7 @@ state = "idle"
 priority = 200
 region = "whole_recent"
 visible_idle = true
-regex = ['(?m)^›[ \t]+Ask Codex to do anything[ \t]*\r?\n(?:[ \t]*\r?\n)*(?:[ \t]{2,}[^›\r\n]+\r?\n)*[ \t]{2,}[^›\r\n]* ·[ \t]*[^\r\n]*(?:\r?\n[ \t]{2,}[^\r\n]+)*(?:\r?\n[ \t]*\?[ \t]+for shortcuts\b[^\r\n]*)?(?:\r?\n[ \t]*)*\z']
+regex = ['(?m)^›[ \t]+Ask Codex to do anything[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]{2,}[^›\r\n]+ ·[ \t]*[^›\r\n]*(?:\r?\n[ \t]{2,}[^?›\[↑↓\r\n][^›\r\n]*)?(?:\r?\n[ \t]*\?[ \t]+for shortcuts\b[^\r\n]*)?(?:\r?\n[ \t]*)*\z']
 not = [
   { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
   { regex = ['(■|⬝){4,}'] },
@@ -210,6 +213,9 @@ not = [
   { contains = ["press enter to confirm"] },
   { contains = ["esc to cancel"] },
   { contains = ["enter to select"] },
+  { contains = ["enter select"] },
+  { contains = ["esc close"] },
+  { regex = ['(?i-u:\[pasted\s+text\b)'] },
   { contains = ["allow command?"] },
   { contains = ["do you want to"] },
   { contains = ["would you like to"] },
