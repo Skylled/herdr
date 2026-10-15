@@ -586,7 +586,64 @@ How the guest's server runs:
 | Sockets | `/Users/kyle/.config/herdr/herdr.sock` (API), `herdr-client.sock` |
 | Not | `groundctl`: it does not exist on the guest. It manages the host's services only |
 
-### Current installed: `0.9.1+fork.7` on the guest (QL-390), installed 2026-10-15; live handoff pending
+### Current installed: `0.9.1+fork.8` on the guest (QL-390), installed 2026-10-15; live handoff pending
+
+Built in a fresh worktree at
+`/Users/kyle/Repos/herdr/.claude/worktrees/herdr-fork-8`, branch
+`fix/herdr-fork-8`, from fork master
+`60f78b03b288a5088d64e6d666f7bfee3ed07fa8` (PR 14 merge). This base contains
+PR 13's fork.7 build/install record and PR 14's QL-390 fixes. No additional
+upstream commits were adopted. The only source change from this master is the
+fork build label.
+
+| | |
+|---|---|
+| Source commit built and installed | `265c804a5c5186cc976381a4938a18018b8d08b3` (`chore: bump fork build to fork.8`) |
+| Label | `0.9.1+fork.8`; Cargo version remains `0.9.1` |
+| SHA-256 (release output) | `63a14cfaa0b1f528c559441c02b7ee7472210bb3c4ba1e8a842b923766f6fa49` |
+| SHA-256 (installed file) | `63a14cfaa0b1f528c559441c02b7ee7472210bb3c4ba1e8a842b923766f6fa49` |
+| SHA-1 (release output and installed file) | `e6507a87c0828b092fcb08b05c892bfb8c2504b5` |
+| Installed path / size | `/Users/kyle/.local/bin/herdr`, 21,765,328 bytes |
+| Backup | `/Users/kyle/.local/bin/herdr.bak-2026-10-15-fork.7` |
+| Backup SHA-256 | `4b679ddbcb1ce0e35398eb358af6d8d77aa4b0cbc05679030b875705b2f0d3fd` |
+| Backup SHA-1 | `233468b85020cf41363bf71035988c197dcd85b1` |
+| Previous image | Reports `0.9.1+fork.7`; both digests match the fork.7 install record |
+| Install | Created a dated backup exclusively (`cp -np`), preserved its metadata and verified its digest; staged release output beside target as `herdr.new`, chmod 755, verified SHA-256, then atomic rename and installed digest verification |
+| Runtime | Installed CLI reports fork.8; read-only `herdr status server` still reports `0.9.1+fork.7`, private protocol 22. No stop, restart or live handoff was performed |
+
+Includes everything in fork.7 plus PR 14's QL-390 fixes: the agy 1.3.5 idle
+rule matches the invariant mode prefix so placeholders truncated at phone widths
+stay idle; File access dialogs are blocked (question, cancel control and
+numbered allow/deny entries); and when the last shell client disconnects, each
+pane grows to at least its headless layout allocation (default 120×40), width
+and height independently, never shrinking a retained larger terminal. Bundled
+and published agy manifests are `2026.10.15.2`.
+
+Validation: `cargo build --release --locked` succeeded with Zig 0.16.0.
+The full Rust suite (`cargo nextest run --locked --no-fail-fast`, `HERDR_*`
+unset) passed all 3,548 tests, with 6 skipped. All 201 remaining tests passed:
+144 Python maintenance, 5 release workflow, 6 architecture, 39 integration asset
+and 7 documentation tests. Formatting, all-target Clippy (`just lint`'s commands)
+and diff checks passed. `just` and Bun are not installed on the guest; the
+recipes' commands were run directly with Python 3.13, and temporary scratch
+copies of Bun 1.3.14 (the CI pin) and just 1.57.0 (the release workflow test
+invokes `just --dry-run`). Windows lint fails as expected: the guest has no
+Windows SDK (`~/.local/share/herdr/windows-cross/libc.txt` is missing), so no
+Windows validation is claimed. Native validation covers this macOS install. The
+existing Codex detection override was left untouched.
+
+**Kyle must run this from a plain SSH shell outside Herdr after review/merge:**
+
+```sh
+/Users/kyle/.local/bin/herdr server live-handoff --import-exe /Users/kyle/.local/bin/herdr --expected-version 0.9.1+fork.8 --expected-protocol 22
+/Users/kyle/.local/bin/herdr status server
+```
+
+Protocol 22 is unchanged from fork.7. The launchd respawn caveat in
+[Installing](#installing) still applies. Until Kyle performs the handoff,
+fork.7 remains the running server and fork.8 is installed on disk only.
+
+### Historical: `0.9.1+fork.7` on the guest (QL-390), installed 2026-10-15, live by 2026-10-15
 
 Built in a fresh worktree at
 `/Users/kyle/Repos/herdr/.claude/worktrees/herdr-fork-7`, branch
