@@ -844,6 +844,24 @@ fn process_exists(pid: libc::pid_t) -> bool {
     }
 }
 
+/// API and status output should advertise the same build identity as the CLI.
+pub fn build_version() -> &'static str {
+    static VERSION: OnceLock<String> = OnceLock::new();
+    VERSION.get_or_init(|| {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_herdr"))
+            .arg("--version")
+            .output()
+            .expect("run herdr --version");
+        assert!(output.status.success(), "herdr --version failed");
+        String::from_utf8(output.stdout)
+            .expect("version is UTF-8")
+            .trim()
+            .strip_prefix("herdr ")
+            .expect("version has herdr prefix")
+            .to_owned()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
