@@ -37,10 +37,11 @@ live; QL-283 is closed.
 | 12 | Grow-only headless geometry; agy 1.3.5 width and file-access rules | QL-390 | `origin/master` (fork PR 14, `60f78b03`) | source merged; no installation claimed here | bug report |
 | 13 | Input-ready background tasks in agy and Claude; fork process override | QL-390 | fork PR 16, this branch | source only; not installed by this PR | Claude shell rule already removed upstream; agy bug report |
 
-The first eleven entries comprise nine behavioural fixes (1, 2, 3, 5, 6, 9, 10, 11, and the
-superseded 4), one fork-identity feature (7), one test-only commit (8). The
-"build branch" column predates 2026-10-02. **`origin/master` is now the build
-line**: it contains all of `codex/rebase-upstream-2026-09-21` plus fork PRs 2–5,
+The thirteen entries comprise eleven behavioural fixes (1, 2, 3, 5, 6, 9, 10,
+11, 12, 13, and the superseded 4), one fork-identity feature (7), and one
+test-only commit (8). Entry 13 also carries fork process guidance. The older
+"build branch" records predate 2026-10-02; entries 12–13 record PRs 14 and 16.
+**`origin/master` is now the build line**: it contains all of `codex/rebase-upstream-2026-09-21` plus fork PRs 2–5,
 and `fork.5` is built from it (see [Installed](#installed)). Fork PR 2
 (`139e4d84`, `c4320480`) also changed the agy, opencode and codex manifests. It
 has no row of its own; patch 11 builds on its agy rule.
@@ -521,6 +522,14 @@ background-agent/MCP-task rules, and blocked rules remain. The upstream remote
 Claude manifest `2026.10.11.1` already removes the shell-only rule; this focused
 patch preserves the fork's other dialog rules.
 
+This intentionally reverses QL-321's deliberate decision to report a completed
+turn as working while background shells linger. Claude queues typed input while
+busy, so sending the next message does not interrupt a running shell or lose the
+input. Once the foreground turn has finished, the input-ready composer is the
+right signal for Earshot; a lingering shell count must not indefinitely block
+that next message. Active foreground turns still match the higher-priority
+working signals, and permission dialogs still block input.
+
 Live smoke on installed Herdr `0.9.1+fork.8`, agy `1.3.5` (Gemini 3.8 Flash Low),
 and Claude Code `2.1.300` (Haiku 5.5 Low) used disposable named sessions and
 isolated config/state. Agy passed ordinary idle, one/two background rows,
@@ -539,6 +548,14 @@ override explicitly requires reading upstream engineering guidance. The root
 `CLAUDE.md -> AGENTS.md` symlink is unchanged. A fork-owned `.claude/CLAUDE.md`
 imports `@../AGENTS.override.md`; Claude Code `2.1.300`'s startup debug log
 confirmed root instructions, that file, and the imported override load in order.
+
+Antigravity `1.3.5`'s embedded rule guide identifies both `AGENTS.md` and
+`GEMINI.md` as automatically discovered directory rules; `AGENTS.override.md`
+is not a discovered filename. The fork-owned `GEMINI.md` therefore directs agy
+to read upstream AGENTS.md first and the shared process override second. The
+local `/context` check ran without a model turn (zero user-message/response
+tokens); it reports usage, not loaded rule paths, so rule-file discovery is
+verified against the installed guide rather than a model's self-report.
 
 Validation: 3,548 Rust tests passed (six skipped), native formatting/clippy,
 maintenance, integration, architecture, documentation, and manifest/catalog

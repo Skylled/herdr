@@ -1,10 +1,33 @@
 # Skylled/herdr fork instructions
 
-This file is owned by the Skylled/herdr fork. Read [AGENTS.md](AGENTS.md) for
-upstream engineering, architecture, detection, compatibility, and testing rules.
-Codex selects this file instead of AGENTS.md at the same directory, so read that
-file explicitly. The following fork process takes precedence over conflicting
-upstream maintainer workflow, commit style, and local-machine instructions:
+Read [AGENTS.md](AGENTS.md) in full FIRST, before doing any task work. All of
+its engineering rules remain in force. Codex automatically loads this file
+INSTEAD OF AGENTS.md at this directory, so you must open AGENTS.md explicitly.
+Only the process items listed below supersede conflicting upstream instructions;
+this fork-owned file does not replace or relax upstream engineering requirements.
+
+Critical engineering rules (a safety net, not a substitute for reading AGENTS.md):
+
+- Keep state separate from runtime, rendering pure, platform behavior isolated,
+  and shared runtime/session facts on the server/API side of the client boundary.
+- Treat render/layout, PTY parsing, detection, and client fanout as multiplicative
+  performance paths. Use narrow accessors, short locks, and hidden-pane early
+  exits. Profile 1 and at least 15 populated panes when widening these paths.
+- Preserve the frozen endpoint contract: published codecs and method shapes are
+  immutable. Add new codecs/capabilities with old fallbacks; never change frozen
+  fixtures to bless a wire change. Check stable/preview protocol publication.
+- Detection changes require real bottom-buffer text/ANSI evidence, explicit
+  invariant AND/OR gates, and the throwaway-session manifest hot-reload/live-smoke
+  loop. Never infer agent status from the user viewport. Test the engine with
+  synthetic manifests rather than adding bundled-agent screen classifiers.
+- Use the just testing recipes and run just check before committing, subject only
+  to the Windows SDK exception below. Characterize refactor-risk behavior before
+  moving code; preserve identity/state invariants and protocol compatibility.
+- Track every local vendored-libghostty patch in vendor/libghostty-vt.patches.md
+  and vendor/patches/libghostty-vt/, including verification and removal conditions.
+  Recheck patches on vendor updates; indexed patches must reverse-apply cleanly.
+
+Fork process overrides:
 
 - Commit without proposing messages or waiting for alignment. Use lowercase
   conventional commits, no emojis, and no AI co-author lines.
