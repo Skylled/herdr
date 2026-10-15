@@ -59,13 +59,15 @@ struct PtyResizeRequest {
 #[derive(Default)]
 struct SharedPtyControls {
     resize: Option<PtyResizeRequest>,
-    nudge: Option<PtyResize>,
+    nudge: bool,
     terminal_responses: Vec<Bytes>,
 }
 
 pub(crate) struct PtyIoActorConfig {
     pub pane_id: u32,
     pub master_fd: OwnedFd,
+    /// Inherited PTY rows, columns, and cell pixel dimensions.
+    pub initial_size: (u16, u16, u32, u32),
     pub initially_quiesced: bool,
     pub on_read: ReadCallback,
     pub on_reader_exit: Option<ReaderExitCallback>,
@@ -220,25 +222,11 @@ impl PtyIoActorHandle {
         self.wake_actor();
     }
 
-    pub(crate) fn nudge_child_redraw_after_handoff(
-        &self,
-        rows: u16,
-        cols: u16,
-        cell_width_px: u32,
-        cell_height_px: u32,
-    ) {
-        {
-            let mut controls = self
-                .controls
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            controls.nudge = Some(PtyResize {
-                rows,
-                cols,
-                cell_width_px,
-                cell_height_px,
-            });
-        }
+    pub(crate) fn nudge_child_redraw_after_handoff(&self) {
+        self.controls
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .nudge = true;
         self.wake_actor();
     }
 
@@ -402,8 +390,15 @@ impl PtyIoActor {
             response_order: Arc::clone(&response_order),
         };
 
+        let (rows, cols, cell_width_px, cell_height_px) = config.initial_size;
         let mut runner = PtyIoActorRunner {
             pane_id: config.pane_id,
+            last_applied_size: PtyResize {
+                rows,
+                cols,
+                cell_width_px,
+                cell_height_px,
+            },
             file: std::fs::File::from(config.master_fd),
             data_rx,
             control_rx,
@@ -442,6 +437,8 @@ impl PtyIoActor {
 
 struct PtyIoActorRunner {
     pane_id: u32,
+    // Owned by the I/O actor; callers cannot supply stale nudge geometry.
+    last_applied_size: PtyResize,
     file: std::fs::File,
     data_rx: mpsc::Receiver<PtyIoDataCommand>,
     control_rx: std_mpsc::Receiver<PtyIoControlCommand>,
@@ -796,22 +793,19 @@ impl PtyIoActorRunner {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             (
                 controls.resize.take(),
-                controls.nudge.take(),
+                std::mem::take(&mut controls.nudge),
                 std::mem::take(&mut controls.terminal_responses),
             )
         };
         if self.state == ActorState::Released {
             return;
         }
-        // A reconnect may resize the pane before the ownership nudge drains.
-        // Use that geometry so the nudge cannot restore stale imported sizes.
-        let nudge = nudge.map(|geometry| resize.as_ref().map_or(geometry, |r| r.resize));
         if let Some(request) = resize {
             self.resize(request.resize);
             self.enqueue_terminal_responses(request.terminal_responses);
         }
-        if let Some(nudge) = nudge {
-            self.nudge(nudge);
+        if nudge {
+            self.nudge();
         }
         self.enqueue_terminal_responses(terminal_responses);
     }
@@ -966,60 +960,41 @@ impl PtyIoActorRunner {
         Ok(None)
     }
 
-    fn resize(&self, resize: PtyResize) {
-        self.log_resize_result(fd::resize_pty_fd(
+    fn resize(&mut self, resize: PtyResize) {
+        match fd::resize_pty_fd(
             self.file.as_raw_fd(),
             resize.rows,
             resize.cols,
             resize.cell_width_px,
             resize.cell_height_px,
-        ));
+        ) {
+            Ok(()) => self.last_applied_size = resize,
+            Err(err) => self.log_resize_result(Err(err)),
+        }
     }
 
-    fn nudge(&mut self, resize: PtyResize) {
+    fn nudge(&mut self) {
         if self.state == ActorState::Released {
             return;
         }
+        let resize = self.last_applied_size;
         let nudge = if resize.rows > 2 {
-            (
-                resize.rows - 1,
-                resize.cols,
-                resize.cell_width_px,
-                resize.cell_height_px,
-            )
+            PtyResize {
+                rows: resize.rows - 1,
+                ..resize
+            }
         } else {
-            (
-                resize.rows,
-                resize.cols.saturating_sub(1).max(4),
-                resize.cell_width_px,
-                resize.cell_height_px,
-            )
+            PtyResize {
+                cols: resize.cols.saturating_sub(1).max(4),
+                ..resize
+            }
         };
-        if nudge
-            == (
-                resize.rows,
-                resize.cols,
-                resize.cell_width_px,
-                resize.cell_height_px,
-            )
-        {
+        if nudge == resize {
             return;
         }
-        self.log_resize_result(fd::resize_pty_fd(
-            self.file.as_raw_fd(),
-            nudge.0,
-            nudge.1,
-            nudge.2,
-            nudge.3,
-        ));
+        self.resize(nudge);
         std::thread::sleep(Duration::from_millis(30));
-        self.log_resize_result(fd::resize_pty_fd(
-            self.file.as_raw_fd(),
-            resize.rows,
-            resize.cols,
-            resize.cell_width_px,
-            resize.cell_height_px,
-        ));
+        self.resize(resize);
     }
 
     fn log_resize_result(&self, result: std::io::Result<()>) {
@@ -1072,6 +1047,7 @@ mod tests {
         let config = PtyIoActorConfig {
             pane_id: 1,
             master_fd: owned,
+            initial_size: (24, 80, 0, 0),
             initially_quiesced,
             on_read: Box::new(move |bytes| {
                 read_tx
@@ -1101,6 +1077,12 @@ mod tests {
         let wake_pipe = fd::create_wake_pipe().expect("wake pipe");
         let runner = PtyIoActorRunner {
             pane_id: 1,
+            last_applied_size: PtyResize {
+                rows: 24,
+                cols: 80,
+                cell_width_px: 0,
+                cell_height_px: 0,
+            },
             file: std::fs::File::from(owned),
             data_rx,
             control_rx,
@@ -1325,6 +1307,7 @@ mod tests {
         let config = PtyIoActorConfig {
             pane_id: 1,
             master_fd: owned,
+            initial_size: (24, 80, 0, 0),
             initially_quiesced: false,
             on_read: Box::new(|_| PtyReadResult::empty()),
             on_reader_exit: Some(Box::new({
@@ -1417,6 +1400,7 @@ mod tests {
         let handle = PtyIoActor::spawn(PtyIoActorConfig {
             pane_id: 1,
             master_fd: owned,
+            initial_size: (24, 80, 0, 0),
             initially_quiesced: false,
             on_read: Box::new(move |bytes| {
                 read_tx
@@ -1622,12 +1606,7 @@ mod tests {
             let mut controls = runner.controls.lock().expect("controls lock");
             // Ownership queued a redraw at imported geometry. Before the
             // actor drains it, a reconnecting client supplies new geometry.
-            controls.nudge = Some(PtyResize {
-                rows: 24,
-                cols: 80,
-                cell_width_px: 0,
-                cell_height_px: 0,
-            });
+            controls.nudge = true;
             controls.resize = Some(PtyResizeRequest {
                 resize: PtyResize {
                     rows: 32,
@@ -1659,6 +1638,45 @@ mod tests {
     }
 
     #[test]
+    fn handoff_nudge_preserves_already_applied_client_resize() {
+        let pair = portable_pty::native_pty_system()
+            .openpty(portable_pty::PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("test PTY");
+        let master_fd = pair.master.as_raw_fd().expect("test PTY master fd");
+        let duplicate = unsafe { libc::dup(master_fd) };
+        assert!(duplicate >= 0);
+        let (mut runner, _peer) = actor_runner_for_unit_test();
+        runner.file = unsafe { std::fs::File::from_raw_fd(duplicate) };
+        runner.controls.lock().expect("controls lock").resize = Some(PtyResizeRequest {
+            resize: PtyResize {
+                rows: 32,
+                cols: 100,
+                cell_width_px: 9,
+                cell_height_px: 17,
+            },
+            terminal_responses: Vec::new(),
+        });
+        runner.apply_pending_controls();
+        // The client resize has already drained before a delayed ownership
+        // nudge arrives. No pending resize remains to correct a stale size.
+        runner.controls.lock().expect("controls lock").nudge = true;
+        runner.apply_pending_controls();
+
+        let mut size: libc::winsize = unsafe { std::mem::zeroed() };
+        assert_eq!(
+            unsafe { libc::ioctl(master_fd, libc::TIOCGWINSZ, &mut size) },
+            0
+        );
+        assert_eq!((size.ws_row, size.ws_col), (32, 100));
+        assert_eq!((size.ws_xpixel, size.ws_ypixel), (900, 544));
+    }
+
+    #[test]
     fn resize_and_nudge_keep_latest_request_when_command_queue_is_full() {
         let (data_tx, _data_rx) = mpsc::channel(1);
         let (control_tx, _control_rx) = std_mpsc::channel();
@@ -1680,7 +1698,7 @@ mod tests {
 
         handle.resize(20, 80, 8, 16, vec![Bytes::from_static(b"old")]);
         handle.resize(40, 120, 9, 18, vec![Bytes::from_static(b"new")]);
-        handle.nudge_child_redraw_after_handoff(41, 121, 10, 20);
+        handle.nudge_child_redraw_after_handoff();
         handle.write_terminal_response(|| Some(Bytes::from_static(b"response")));
 
         let controls = controls.lock().expect("controls lock");
@@ -1696,15 +1714,7 @@ mod tests {
                 terminal_responses: vec![Bytes::from_static(b"new")],
             })
         );
-        assert_eq!(
-            controls.nudge,
-            Some(PtyResize {
-                rows: 41,
-                cols: 121,
-                cell_width_px: 10,
-                cell_height_px: 20,
-            })
-        );
+        assert!(controls.nudge);
         assert_eq!(
             controls.terminal_responses,
             vec![Bytes::from_static(b"response")]
@@ -1727,6 +1737,12 @@ mod tests {
         let query_light = Arc::clone(&light);
         let runner = PtyIoActorRunner {
             pane_id: 1,
+            last_applied_size: PtyResize {
+                rows: 24,
+                cols: 80,
+                cell_width_px: 0,
+                cell_height_px: 0,
+            },
             file: std::fs::File::from(owned),
             data_rx,
             control_rx,
@@ -1860,6 +1876,12 @@ mod tests {
             .expect("queued write");
         let mut runner = PtyIoActorRunner {
             pane_id: 1,
+            last_applied_size: PtyResize {
+                rows: 24,
+                cols: 80,
+                cell_width_px: 0,
+                cell_height_px: 0,
+            },
             file: std::fs::File::from(unsafe { OwnedFd::from_raw_fd(actor_socket.into_raw_fd()) }),
             data_rx,
             control_rx,

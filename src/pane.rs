@@ -1368,17 +1368,9 @@ impl PaneRuntimeIo {
     }
 
     #[cfg(unix)]
-    fn nudge_child_redraw_after_handoff(
-        &self,
-        rows: u16,
-        cols: u16,
-        cell_width_px: u32,
-        cell_height_px: u32,
-    ) {
+    fn nudge_child_redraw_after_handoff(&self) {
         match self {
-            PaneRuntimeIo::Actor(actor) => {
-                actor.nudge_child_redraw_after_handoff(rows, cols, cell_width_px, cell_height_px);
-            }
+            PaneRuntimeIo::Actor(actor) => actor.nudge_child_redraw_after_handoff(),
             #[cfg(test)]
             PaneRuntimeIo::TestChannel { .. } => {}
         }
@@ -2387,6 +2379,7 @@ impl PaneRuntime {
             PaneRuntimeIo::Actor(PtyIoActor::spawn(PtyIoActorConfig {
                 pane_id: pane_id.raw(),
                 master_fd,
+                initial_size: (rows, cols, cell_width_px, cell_height_px),
                 initially_quiesced: true,
                 on_read,
                 on_reader_exit: Some(on_reader_exit),
@@ -2576,6 +2569,8 @@ impl PaneRuntime {
                 pane_id: pane_id.raw(),
                 #[cfg(unix)]
                 master_fd: spawned.master_fd,
+                #[cfg(unix)]
+                initial_size: (rows, cols, 0, 0),
                 #[cfg(windows)]
                 master: spawned.master,
                 initially_quiesced: false,
@@ -3073,9 +3068,7 @@ impl PaneRuntime {
 
     #[cfg(unix)]
     pub fn nudge_child_redraw_after_handoff(&self) {
-        let (rows, cols, cell_width_px, cell_height_px) = self.current_size.get();
-        self.io
-            .nudge_child_redraw_after_handoff(rows, cols, cell_width_px, cell_height_px);
+        self.io.nudge_child_redraw_after_handoff();
     }
 
     /// Scroll up by N lines (into scrollback history).
