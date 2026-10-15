@@ -803,6 +803,9 @@ impl PtyIoActorRunner {
         if self.state == ActorState::Released {
             return;
         }
+        // A reconnect may resize the pane before the ownership nudge drains.
+        // Use that geometry so the nudge cannot restore stale imported sizes.
+        let nudge = nudge.map(|geometry| resize.as_ref().map_or(geometry, |r| r.resize));
         if let Some(request) = resize {
             self.resize(request.resize);
             self.enqueue_terminal_responses(request.terminal_responses);
@@ -1598,6 +1601,61 @@ mod tests {
             .expect("actor still reads after duplicate closes");
         assert_eq!(read, Bytes::from_static(b"still-live"));
         handle.shutdown();
+    }
+
+    #[test]
+    fn handoff_nudge_preserves_concurrent_client_resize() {
+        let pair = portable_pty::native_pty_system()
+            .openpty(portable_pty::PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("test PTY");
+        let master_fd = pair.master.as_raw_fd().expect("test PTY master fd");
+        let duplicate = unsafe { libc::dup(master_fd) };
+        assert!(duplicate >= 0);
+        let (mut runner, _peer) = actor_runner_for_unit_test();
+        runner.file = unsafe { std::fs::File::from_raw_fd(duplicate) };
+        {
+            let mut controls = runner.controls.lock().expect("controls lock");
+            // Ownership queued a redraw at imported geometry. Before the
+            // actor drains it, a reconnecting client supplies new geometry.
+            controls.nudge = Some(PtyResize {
+                rows: 24,
+                cols: 80,
+                cell_width_px: 0,
+                cell_height_px: 0,
+            });
+            controls.resize = Some(PtyResizeRequest {
+                resize: PtyResize {
+                    rows: 32,
+                    cols: 100,
+                    cell_width_px: 9,
+                    cell_height_px: 17,
+                },
+                terminal_responses: vec![Bytes::from_static(b"client-response")],
+            });
+        }
+
+        runner.apply_pending_controls();
+
+        let mut size: libc::winsize = unsafe { std::mem::zeroed() };
+        assert_eq!(
+            unsafe { libc::ioctl(master_fd, libc::TIOCGWINSZ, &mut size) },
+            0
+        );
+        assert_eq!((size.ws_row, size.ws_col), (32, 100));
+        assert_eq!((size.ws_xpixel, size.ws_ypixel), (900, 544));
+        assert_eq!(
+            runner
+                .pending_writes
+                .front()
+                .expect("terminal response")
+                .bytes,
+            Bytes::from_static(b"client-response")
+        );
     }
 
     #[test]
