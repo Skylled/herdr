@@ -1,7 +1,7 @@
 id = "claude"
-version = "2026.10.06.1"
+version = "2026.10.15.1"
 min_engine_version = 2
-updated_at = "2026-10-06T00:00:00Z"
+updated_at = "2026-10-15T00:00:00Z"
 aliases = ["claude-code"]
 
 [[rules]]
@@ -32,15 +32,11 @@ region = "last_non_empty_above_prompt_box"
 visible_working = true
 line_regex = ['^\s*[\x{002A}\x{00B7}\x{2722}\x{2736}\x{273B}\x{273D}]\s+Waiting for [1-9]\d* background agents? to finish\s*$']
 
-[[rules]]
-id = "background_shells_working"
-state = "working"
-priority = 965
-region = "last_non_empty_above_prompt_box"
-visible_working = true
-# QL-321: a finished foreground turn can still have background work. Only the
-# activity summary immediately above the prompt counts, never the shell footer.
-line_regex = ['^\s*[\x{002A}\x{00B7}\x{2722}\x{2733}\x{2736}\x{273B}\x{273D}]\s+\S.*·\s*[1-9]\d*\s+shells?\s+still\s+running\s*$']
+# QL-390: a completed turn can leave shells running while accepting input.
+# Live Claude Code 2.1.300 showed "done <clock> · 1 shell still running" above
+# the composer and "1 shell" in the status bar. Neither is foreground activity;
+# active turns remain covered by the title spinner and live_turn_working rules.
+# This also matches upstream's removal in its 2026.10.11.1 remote manifest.
 
 [[rules]]
 id = "background_mcp_task_working"

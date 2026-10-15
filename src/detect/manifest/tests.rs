@@ -152,43 +152,11 @@ fn ql321_claude_dialog_fixtures_name_blockers() {
 }
 
 #[test]
-fn ql321_claude_background_shell_summary_is_working() {
+fn ql321_claude_mcp_summary_and_dialog_precedence() {
+    // QL-390 removes the former shell-only working rule. Retain the existing
+    // independent MCP and dialog checks from this legacy fork regression.
     let fixture = include_str!("../fixtures/claude-dialogs/background-shells.txt");
     for loaded in ql321_claude_manifests() {
-        for count in ["1 shell", "2 shells", "12 shells"] {
-            let screen = fixture.replace("1 shell still", &format!("{count} still"));
-            for title in ["", "✳ Finished | fixture"] {
-                let result = ql321_claude_explain(&loaded, &screen, title);
-                assert_eq!(result.state, AgentState::Working);
-                assert_eq!(
-                    result.matched_rule.as_ref().map(|r| r.id.as_str()),
-                    Some("background_shells_working")
-                );
-                assert!(result.visible_working);
-                assert!(!result.visible_blocker);
-            }
-        }
-        for screen in [
-            fixture.replace("1 shell still running", "0 shells still running"),
-            fixture.replace(
-                "1 shell still running",
-                "1 shell still running in transcript",
-            ),
-            fixture.replace("1 shell still running", "1 shell"),
-            fixture.replace("1 shell still running", "1 MCP task still running"),
-            fixture.replace("\n\n─", "\nConversation continues here.\n\n─"),
-            fixture.replace("✻ Sautéed for 10s · 1 shell still running\n", ""),
-            fixture
-                .replace("✻ Sautéed for 10s · 1 shell still running\n", "")
-                .replace("❯\n", "❯ ✻ Sautéed for 10s · 1 shell still running\n"),
-        ] {
-            let result = ql321_claude_explain(&loaded, &screen, "");
-            assert_ne!(
-                result.matched_rule.as_ref().map(|r| r.id.as_str()),
-                Some("background_shells_working"),
-                "{screen}"
-            );
-        }
         let idle = include_str!("../fixtures/claude-dialogs/claude-2.1.291-idle-100.txt");
         let result = ql321_claude_explain(&loaded, idle, "");
         assert_eq!(result.state, AgentState::Idle);
