@@ -511,7 +511,58 @@ How the guest's server runs:
 | Sockets | `/Users/kyle/.config/herdr/herdr.sock` (API), `herdr-client.sock` |
 | Not | `groundctl`: it does not exist on the guest. It manages the host's services only |
 
-### Current: `0.9.1+fork.6` on the guest (QL-378), installed 2026-10-14, live 2026-10-15
+### Current installed: `0.9.1+fork.7` on the guest (QL-390), installed 2026-10-15; live handoff pending
+
+Built in a fresh worktree at
+`/Users/kyle/Repos/herdr/.claude/worktrees/herdr-fork-7`, branch
+`fix/herdr-fork-7`, from fork master
+`9cb52abe804c0bd4f30e3cb7d66280f506330c94` (PR 12 merge). This base contains
+PR 11's fork.6 build/install record and PR 12's Antigravity 1.3.5 prompt-rule
+fix (QL-390). No additional upstream commits were adopted. The only source
+change from this master is the fork build label.
+
+| | |
+|---|---|
+| Source commit built and installed | `c5175e455c19e1f000faa492490ed5b29c2beccf` (`chore: bump fork build to fork.7`) |
+| Label | `0.9.1+fork.7`; Cargo version remains `0.9.1` |
+| SHA-256 (release output) | `4b679ddbcb1ce0e35398eb358af6d8d77aa4b0cbc05679030b875705b2f0d3fd` |
+| SHA-256 (installed file) | `4b679ddbcb1ce0e35398eb358af6d8d77aa4b0cbc05679030b875705b2f0d3fd` |
+| SHA-1 (release output and installed file) | `233468b85020cf41363bf71035988c197dcd85b1` |
+| Installed path / size | `/Users/kyle/.local/bin/herdr`, 21,732,096 bytes |
+| Backup | `/Users/kyle/.local/bin/herdr.bak-2026-10-15-fork.6` |
+| Backup SHA-256 | `1a6aed86b4bbf260d1d9d4506938e6cf7e273828f9d8414e7c0579705c8172e7` |
+| Backup SHA-1 | `a05e627861ce8512c3a4f9bc7795b515c320d989` |
+| Previous image | Reports `0.9.1+fork.6`; both digests match the fork.6 install record |
+| Install | Created a dated backup exclusively, preserved its metadata and verified its digest; staged release output beside target as `herdr.new`, chmod 755, verified SHA-256, then atomic rename and installed digest verification |
+| Runtime | Installed CLI reports fork.7; read-only `herdr status server` still reports `0.9.1+fork.6`, private protocol 22. No stop, restart or live handoff was performed |
+
+Includes everything in fork.6 plus PR 12's QL-390 prompt rule: default empty,
+Auto, Plan and Accept-edits prompts are idle, preserving the existing frame,
+footer anchor and all 20 vetoes. The live Antigravity 1.3.5 validation is recorded
+in the QL-390 patch entry above.
+
+Validation: `cargo build --release --locked` succeeded with Zig 0.16.0.
+The full Rust suite (`cargo nextest run --locked --no-fail-fast`) passed all
+3,537 tests, with 6 skipped, using elevated access for disposable Unix sockets.
+All 201 remaining tests passed: 144 Python maintenance, 5 release workflow,
+6 architecture, 39 integration asset and 7 documentation tests. Formatting,
+all-target Clippy (`just lint`) and diff checks passed. The existing temporary
+just/Bun tools and Python 3.13 were used. The guest still has no Windows SDK;
+no Windows validation is claimed. Native validation covers this macOS install.
+The existing Codex detection override was left untouched.
+
+**Kyle must run this from a plain SSH shell outside Herdr after review/merge:**
+
+```sh
+/Users/kyle/.local/bin/herdr server live-handoff --import-exe /Users/kyle/.local/bin/herdr --expected-version 0.9.1+fork.7 --expected-protocol 22
+/Users/kyle/.local/bin/herdr status server
+```
+
+Protocol 22 is unchanged from fork.6. The launchd respawn caveat in
+[Installing](#installing) still applies. Until Kyle performs the handoff,
+fork.6 remains the running server and fork.7 is installed on disk only.
+
+### Historical: `0.9.1+fork.6` on the guest (QL-378), installed 2026-10-14, live 2026-10-15
 
 Built in a fresh worktree at
 `/Users/kyle/Repos/herdr/.claude/worktrees/herdr-fork-6`, from fork master
