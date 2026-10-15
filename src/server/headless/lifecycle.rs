@@ -275,19 +275,6 @@ impl HeadlessServer {
         let _ = std::fs::remove_file(socket_path);
     }
 
-    #[cfg(unix)]
-    pub(super) fn nudge_handoff_panes_on_first_client_attach(&mut self) {
-        if !self.pending_handoff_repaint_nudge {
-            return;
-        }
-        self.pending_handoff_repaint_nudge = false;
-        self.app
-            .terminal_runtimes
-            .nudge_child_redraw_after_handoff();
-    }
-
-    #[cfg(not(unix))]
-    pub(super) fn nudge_handoff_panes_on_first_client_attach(&mut self) {}
     /// Initiates graceful shutdown.
     pub(super) fn initiate_shutdown(&mut self) {
         if self.shutting_down {

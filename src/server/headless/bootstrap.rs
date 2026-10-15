@@ -188,13 +188,12 @@ fn run_handoff_import_server(socket_path: &Path, token: &str) -> io::Result<()> 
         crate::server::handoff::wait_committed(&mut received.stream)?;
         server.app.assume_handoff_ownership();
         server.app.unpause_handoff_readers();
-        // API-only users may never attach a TUI. Recover alternate-screen
-        // apps now, then nudge again after an attached client's final geometry.
+        // API-only users may never attach a TUI. Nudge once after ownership
+        // commits; a later client's actual geometry changes use normal resize.
         server
             .app
             .terminal_runtimes
             .nudge_child_redraw_after_handoff();
-        server.pending_handoff_repaint_nudge = true;
         if let Err(err) = crate::server::handoff::report_owned(&mut received.stream) {
             warn!(err = %err, "failed to report handoff ownership; continuing as owner");
         }
