@@ -7,6 +7,6 @@ Bump the display label from fork.5 to fork.6, correct integration-test version a
 
 Validation: release build succeeded; formatting, all-target Clippy, 3,537 tests (6 skipped), 144 maintenance tests, release workflow/architecture/integration checks passed. `just check` stops only at the missing Windows SDK; docs contract checks passed separately (7 tests). This is a macOS install; no Windows validation is claimed.
 
-Kyle still needs to run the recorded `server live-handoff` from outside Herdr to activate the new binary while preserving pane processes. PID 1186 continues serving fork.5; no restart or handoff was performed. The Codex override stays because upstream #4563 is not included. No further implementation work remains.
+Kyle completed `server live-handoff` on 2026-10-15. The running server and CLI both report `0.9.1+fork.6`, private protocol 22 remains compatible, and the installed SHA-256 matches `1a6aed86b4bbf260d1d9d4506938e6cf7e273828f9d8414e7c0579705c8172e7`. The Codex override stays because upstream #4563 is not included. No further implementation work remains.
 
 Target: `Skylled/herdr` default branch `master`. Ready for review; agents do not merge.

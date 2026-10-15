@@ -476,7 +476,7 @@ How the guest's server runs:
 | Sockets | `/Users/kyle/.config/herdr/herdr.sock` (API), `herdr-client.sock` |
 | Not | `groundctl`: it does not exist on the guest. It manages the host's services only |
 
-### Current on disk: `0.9.1+fork.6` on the guest (QL-378), installed 2026-10-14
+### Current: `0.9.1+fork.6` on the guest (QL-378), installed 2026-10-14, live 2026-10-15
 
 Built in a fresh worktree at
 `/Users/kyle/Repos/herdr/.claude/worktrees/herdr-fork-6`, from fork master
@@ -495,7 +495,7 @@ No additional upstream commits were adopted.
 | Backup SHA-1 | `a793732739b87d9f1193719e19008d702e7b6e4b` |
 | Previous image | Reports `0.9.1+fork.5`, but its digest does not match the QL-283 install record; exact source unverified |
 | Install | Preserved dated backup; copied release output beside target as `herdr.new`, chmod 755, verified SHA-256, then atomic rename |
-| Runtime | **Not restarted or handed off.** PID 1186 still serves `0.9.1+fork.5`, private protocol 22 |
+| Runtime | fork.6 went live via live-handoff on 2026-10-15, performed by Kyle. Verified with `herdr status server`: `0.9.1+fork.6`, private protocol 22; CLI version and installed SHA-256 match this record |
 
 Included patches: existing fork patches 1–3, 5–8 and subsequent fork detection
 fixes (PRs 2–5 and 7), plus [PR 8](https://github.com/Skylled/herdr/pull/8)
@@ -526,8 +526,8 @@ Guest launch was checked with `launchctl list`, plist inspection and `ps`:
 `/Users/kyle/.local/bin/herdr server` with KeepAlive and RunAtLoad. The running
 process mapped the backed-up file inode 38452873 before the swap.
 
-**Kyle's step, from outside a Herdr pane:** there is no stop/start pair that
-preserves pane processes. Use the procedure's handoff instead:
+**Completed by Kyle on 2026-10-15, from outside a Herdr pane:** the live-handoff
+procedure preserves pane processes:
 
 ```sh
 /Users/kyle/.local/bin/herdr server live-handoff --import-exe /Users/kyle/.local/bin/herdr --expected-version 0.9.1+fork.6 --expected-protocol 22
@@ -535,7 +535,7 @@ preserves pane processes. Use the procedure's handoff instead:
 ```
 
 The launchd respawn caveat in [Installing](#installing) still applies. No server
-lifecycle command was run during this install.
+lifecycle command was run by the recording agent; Kyle performed the handoff.
 
 ### Historical: `0.9.1+fork.5` on the guest (QL-283), installed 2026-10-02
 
