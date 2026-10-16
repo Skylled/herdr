@@ -312,15 +312,12 @@ fn codex_manifests() -> Vec<LoadedManifest> {
     .collect()
 }
 
-// Quest Log QL-390: idle Codex screens with completed turns can show a
-// "? for shortcuts" footer line below the model/cwd footer, which may also carry
-// a trailing status such as "⚠ N warning(s) · f2 to view". Background terminals
-// and 5h limit warnings above the composer must not block idle, while over-matches
-// (indented choice options, navigation footers, paste placeholders, extra output,
-// active working turns, and approval dialogs) must never be called idle.
+// QL-390 explicitly requests bundled/catalog screen regressions for this fork.
+// Only the 120-column sample is a capture; other screens are adversarial inputs,
+// not claims about how Codex wraps a narrower PTY.
 #[test]
 fn ql390_codex_background_terminal_idle_and_blockers() {
-    let capture_120_cols = "\
+    let capture = "\
   1 background terminal running · /ps to view · /stop to close
 
                                     ⚠ 5h limit: 14% left · resets at 6:10 PM · /status
@@ -330,159 +327,153 @@ fn ql390_codex_background_terminal_idle_and_blockers() {
   GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/ql-390-herdr-handoff-redraw-agy-7dc87103 · Read fleet and quest guidanc…
   ? for shortcuts                                                                             ⚠ 2 warnings · f2 to view
 ";
-
-    let capture_60_cols = "\
-  1 background terminal running · /ps to view · /stop to close
-
-  ⚠ 5h limit: 14% left · resets at 6:10 PM · /status
-
-› Ask Codex to do anything
-
-  GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/
-  ql-390-herdr-handoff-redraw-agy-7dc87103 · Read fleet and qu…
-  ? for shortcuts              ⚠ 2 warnings · f2 to view
-";
-
-    let capture_60_cols_wrapped_at_dot = "\
-  1 background terminal running · /ps to view · /stop to close
-
-  ⚠ 5h limit: 14% left · resets at 6:10 PM · /status
-
-› Ask Codex to do anything
-
-  GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/ql-390-7dc87103
-  · Read fleet and quest guidance…
-  ? for shortcuts              ⚠ 2 warnings · f2 to view
-";
-
+    let composer = "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n";
     for loaded in codex_manifests() {
-        // Positive tests: exact 120-col and 60-col captures, background terminals,
-        // limit warnings, clean finishes, CRLF, wrapped footers, with/without shortcuts/warnings.
-        for screen in [
-            capture_120_cols.to_string(),
-            capture_120_cols.replace('\n', "\r\n"),
-            capture_60_cols.to_string(),
-            capture_60_cols.replace('\n', "\r\n"),
-            capture_60_cols_wrapped_at_dot.to_string(),
-            capture_120_cols.replace("1 background terminal", "2 background terminals"),
-            capture_120_cols.replace("1 background terminal", "12 background terminals"),
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n".to_string(),
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  ? for shortcuts\n".to_string(),
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/\n  ql-390-herdr-handoff-redraw-agy-7dc87103\n".to_string(),
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr/.worktrees/\n  ql-390-herdr-handoff-redraw-agy-7dc87103\n  ? for shortcuts\n".to_string(),
-            "  Worked for 7m 52s • 2:10 PM\n  1 background terminal running · /ps to view · /stop to close\n› Ask Codex to do anything\n  model · /work\n".to_string(),
-        ] {
-            let result = evaluate_loaded_manifest(
-                Agent::Codex,
-                DetectionInput {
-                    screen: &screen,
-                    osc_title: "",
-                    osc_progress: "",
-                },
-                loaded.clone(),
-                false,
-            );
-            assert_eq!(result.state, AgentState::Idle, "{screen:?}");
-            assert_eq!(
-                result.matched_rule.as_ref().map(|r| r.id.as_str()),
-                Some("live_prompt_box"),
-                "{screen:?}"
-            );
-            assert!(result.visible_idle, "{screen:?}");
-            assert!(!result.visible_working, "{screen:?}");
-            assert!(!result.visible_blocker, "{screen:?}");
-        }
-
-        // Negative tests for each over-match: indented options, navigation footers,
-        // paste placeholders, and extra output must never match live_prompt_box or be visible_idle.
-        for screen in [
-            // Indented › 1. Yes / 2. No options
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n    › 1. Yes\n    2. No\n",
-            // Indented options with navigation footer
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n    › 1. Yes\n    2. No\n  ↑↓ navigate · enter select · esc close\n",
-            // Standalone "↑↓ navigate · enter select · esc close" footer
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  ↑↓ navigate · enter select · esc close\n",
-            // Navigation footer variant without arrows
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  navigate · enter select · esc close\n",
-            // Paste placeholder below composer
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  [Pasted text #1: 12 lines]\n",
-            // Paste placeholder inside composer
-            "› Ask Codex to do anything\n  [Pasted text #1: 12 lines]\n  GPT-6.1-Sol medium · ~/Repos/herdr\n",
-            // Extra output after model footer (2 lines)
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  extra output line 1\n  extra output line 2\n",
-            // Extra output after model footer (3 lines)
-            "› Ask Codex to do anything\n\n  GPT-6.1-Sol medium · ~/Repos/herdr\n  Compiling herdr v0.1.0\n  Finished dev [unoptimized] target(s)\n  Running unittests\n",
-        ] {
-            let result = evaluate_loaded_manifest(
+        let evaluate = |screen: &str, title: &str| {
+            evaluate_loaded_manifest(
                 Agent::Codex,
                 DetectionInput {
                     screen,
-                    osc_title: "",
+                    osc_title: title,
                     osc_progress: "",
                 },
                 loaded.clone(),
                 false,
-            );
-            assert_ne!(
-                result.matched_rule.as_ref().map(|r| r.id.as_str()),
-                Some("live_prompt_box"),
-                "over-match should not trigger live_prompt_box: {screen:?}"
-            );
-            assert!(
-                !result.visible_idle,
-                "over-match must not be visible_idle: {screen:?}"
-            );
+            )
+        };
+        let mut idle = vec![
+            capture.to_string(),
+            capture.replace('\n', "\r\n"),
+            capture.replace("1 background terminal", "2 background terminals"),
+            capture.replace("1 background terminal", "12 background terminals"),
+            composer.to_string(),
+            format!("{composer}  ? for shortcuts\n"),
+            format!("{composer}\t? for shortcuts\t⚠\t10\twarnings\t·\tf2 to view\t\n"),
+            format!("  Worked for 7m 52s • 2:10 PM\n{composer}"),
+        ];
+        for warnings in ["1 warning", "2 warnings", "10 warnings", "123 warnings"] {
+            idle.push(capture.replace("2 warnings", warnings));
+        }
+        // These strings in a prior response are not live menu controls.
+        for history in [
+            "• The previous input had [Pasted text #1: 12 lines]",
+            "• The instructions mention enter select and esc close.",
+        ] {
+            idle.push(format!("{history}\n{capture}"));
+        }
+        for screen in idle {
+            for title in ["", "Codex | herdr"] {
+                let result = evaluate(&screen, title);
+                assert_eq!(result.state, AgentState::Idle, "{screen:?}");
+                assert!(result.visible_idle, "{screen:?}");
+                assert!(
+                    !result.visible_working && !result.visible_blocker,
+                    "{screen:?}"
+                );
+                assert!(result.fallback_reason.is_none(), "{screen:?}");
+            }
         }
 
-        // Active working turns must never be called idle.
-        for screen in [
-            format!("• Working (12s • esc to interrupt)\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}"),
-            format!("Thinking (45s • esc to interrupt)\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}"),
-            format!("Working (12s)\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}"),
-            format!("• Queued follow-up inputs\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}"),
+        // Reject one extra line as well as multiple lines, at every indentation.
+        // Assert the state, so neither fallback Idle nor OSC idle masks a rejection.
+        let mut unsupported = vec![
+            composer.replace(" · ~/Repos/herdr", " ·"),
+            composer.replace(" · ~/Repos/herdr", " ·   "),
+            format!("{composer}  extra output line 1\n  extra output line 2\n"),
+            format!("{composer}  Compiling herdr v0.1.0\n  Finished dev\n  Running unittests\n"),
+            "› Ask Codex to do anything\n  [Pasted text #1: 12 lines]\n  model · /work\n"
+                .to_string(),
+            // Unsupported wrapping must fail closed, never be called a capture.
+            format!("{composer}  wrapped/path\n  ? for shortcuts\n"),
+            "› Ask Codex to do anything\n  model\n  · /work\n".to_string(),
+            format!("{composer}  ? for shortcuts\n  ⚠ 2 warnings · f2 to view\n"),
+        ];
+        for indent in ["  ", "   ", "    ", "\t\t"] {
+            for extra in [
+                "extra output line 1",
+                "Compiling herdr v0.1.0",
+                "[1] Option",
+                "? Select an option",
+                "↑↓ navigate",
+                "1. Yes   2. No",
+                "❯ 1. Yes",
+                "[Pasted text #1: 12 lines]",
+            ] {
+                unsupported.push(format!("{composer}{indent}{extra}\n"));
+            }
+        }
+        for tail in [
+            " arbitrary output",
+            " ·",
+            " ⚠ warnings · f2 to view",
+            " ⚠ 1 warning",
+            " ⚠ 2 warnings · f2 to view arbitrary output",
+            " ⚠ 2 warnings · f3 to view",
+            " · enter select",
+            " ⚠ -1 warnings · f2 to view",
         ] {
-            let result = evaluate_loaded_manifest(
-                Agent::Codex,
-                DetectionInput {
-                    screen: &screen,
-                    osc_title: "",
-                    osc_progress: "",
-                },
-                loaded.clone(),
-                false,
-            );
+            unsupported.push(format!("{composer}  ? for shortcuts{tail}\n"));
+        }
+        for screen in unsupported {
+            for title in ["", "Codex | herdr"] {
+                let result = evaluate(&screen, title);
+                assert_eq!(result.state, AgentState::Unknown, "{screen:?}");
+                assert!(!result.visible_idle, "{screen:?}");
+            }
+        }
+
+        for activity in [
+            "• Working (12s • esc to interrupt)",
+            "Thinking (45s • esc to interrupt)",
+            "Working (12s)",
+            "• Queued follow-up inputs",
+        ] {
+            let screen = format!("{activity}\n{capture}");
+            let result = evaluate(&screen, "");
             assert_eq!(result.state, AgentState::Working, "{screen:?}");
-            assert!(result.visible_working, "{screen:?}");
-            assert!(!result.visible_idle, "{screen:?}");
+            assert!(result.visible_working && !result.visible_idle, "{screen:?}");
         }
 
-        // Approval dialogs must remain blocked.
+        // Realistic permission, picker, and update layouts: controls may appear
+        // above a retained composer, below its footer, or without a composer.
         for dialog in [
-            "Allow command?\ngit status\n  1. Yes, run command (y)\n  2. No, cancel (n)",
-            "Would you like to run the following command?",
-            "Proceed? [y/n]",
-            "Waiting for permission",
-            "esc to cancel",
-            "enter to select",
-            "enter select",
-            "esc close",
-            "Do you trust the contents of this directory?",
+            "Allow command?\ngit status\n  › 1. Yes, run command (y)\n    2. No, cancel (n)\n",
+            "Would you like to run the following command?\n$ git status\n  › 1. Yes, proceed (y)\n    2. No, and tell Codex what to do differently (esc)\n",
+            "Would you\nlike to run this command?\n$ git status\n",
+            "Do you trust the contents\nof this directory?\n",
+            "Waiting for\npermission\n",
+            "Press enter to\nconfirm or esc to cancel\n",
+            "  › 1. Yes\n    2. No\n",
+            "  ❯ 1. Yes\n    2. No\n",
+            "Select a review preset\n\n› 1. Review against a base branch  (PR Style)\n  2. Review uncommitted changes\n  3. Review a commit\n  4. Custom review instructions\n\n  enter select · esc back\n",
+            "    1. Yes\n    2. No\n",
+            "  1. Yes\n› 2. No\n",
+            "  1. Yes\n  ❯ 2. No\n",
+            "Choose a task\n  › 1. first task\n    2. second task\n  ↑↓ navigate · enter select · esc close\n",
+            "Choose a task\n  navigate · enter select · esc close\n",
+            "Update available · 0.157.0 → 0.158.0\n  › 1. Update now\n    2. Skip\n    3. Skip until next version\n  enter continue · esc skip\n",
         ] {
-            let screen = format!("{dialog}\n  1 background terminal running · /ps to view · /stop to close\n{capture_120_cols}");
-            let result = evaluate_loaded_manifest(
-                Agent::Codex,
-                DetectionInput {
-                    screen: &screen,
-                    osc_title: "",
-                    osc_progress: "",
-                },
-                loaded.clone(),
-                false,
-            );
-            assert_eq!(result.state, AgentState::Blocked, "{screen:?}");
-            assert!(result.visible_blocker, "{screen:?}");
-            assert!(!result.visible_idle, "{screen:?}");
+            for screen in [format!("{dialog}{capture}"), format!("{composer}{dialog}")] {
+                for title in ["", "Codex | herdr"] {
+                    let result = evaluate(&screen, title);
+                    assert_eq!(result.state, AgentState::Blocked, "{screen:?}");
+                    assert!(result.visible_blocker && !result.visible_idle, "{screen:?}");
+                }
+            }
         }
+        let result = evaluate("  › 1. Yes\n    2. No\n", "Codex | herdr");
+        assert_eq!(result.state, AgentState::Blocked);
+        assert!(result.visible_blocker);
+
+        // Earshot refuses this named fallback; don't silently replace the global
+        // known-agent policy just to make a negative screen test pass.
+        let fallback = evaluate("an unrecognized screen", "");
+        assert_eq!(fallback.state, AgentState::Idle);
+        assert!(!fallback.visible_idle);
+        assert_eq!(
+            fallback.fallback_reason.as_deref(),
+            Some("default_known_agent_idle_fallback")
+        );
     }
 }
 
