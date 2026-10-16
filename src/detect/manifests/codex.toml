@@ -88,6 +88,10 @@ regex = [
   '(?:Press enter to continue|(?m:^[ \t]*)enter continue(?: · [^\r\n]*)?)\s*\z',
 ]
 
+# These controls must end the detection buffer: the same lines in transcript
+# history above a live composer or working timer are not an active menu.
+# Support two-option Yes/No menus and Codex's three-option exec approval
+# (Yes, proceed / Yes, and don't ask again / No, and tell Codex).
 [[rules]]
 id = "live_menu_blocked"
 state = "blocked"
@@ -95,9 +99,9 @@ priority = 925
 region = "whole_recent"
 visible_blocker = true
 any = [
-  { regex = ['(?mi:^[ \t]*[›❯]?[ \t]*1\.[ \t]+Yes\b[^\r\n]*\r?\n[ \t]*[›❯]?[ \t]*2\.[ \t]+No\b)'] },
-  { regex = ['(?mi:^[ \t]*(?:(?:↑↓[ \t]+)?navigate[ \t]+·[ \t]+)?enter\s+select[ \t]+·[ \t]+esc\s+(?:close|back)[ \t]*\r?$)'] },
-  { regex = ['(?mi-u:^[ \t]*enter\s+continue\s+·\s+esc\s+skip[ \t]*\r?$)'] },
+  { regex = ['(?mi:^[ \t]*[›❯]?[ \t]*1\.[ \t]+Yes\b[^\r\n]*\r?\n(?:[ \t]*[›❯]?[ \t]*2\.[ \t]+Yes\b[^\r\n]*\r?\n[ \t]*[›❯]?[ \t]*3|[ \t]*[›❯]?[ \t]*2)\.[ \t]+No\b[^\r\n]*(?:\r?\n[ \t]*)*\z)'] },
+  { regex = ['(?mi:^[ \t]*(?:(?:↑↓[ \t]+)?navigate[ \t]+·[ \t]+)?enter\s+select[ \t]+·[ \t]+esc\s+(?:close|back)[ \t]*(?:\r?\n[ \t]*)*\z)'] },
+  { regex = ['(?mi-u:^[ \t]*enter\s+continue\s+·\s+esc\s+skip[ \t]*(?:\r?\n[ \t]*)*\z)'] },
 ]
 
 [[rules]]
@@ -184,8 +188,8 @@ any = [
   { regex = ['(?i-u:do\s+you\s+trust\s+the\s+contents\s+of\s+this\s+directory\?)'] },
   { regex = ['(?i-u:Update\s+available(?:!|\s+·))'] },
   { regex = ['(?i-u:press\s+enter\s+to\s+continue)'] },
-  { contains = ["esc dismiss"] },
-  { contains = ["q to quit"] },
+  { regex = ['(?i-u:esc\s+dismiss)'] },
+  { regex = ['(?i-u:q\s+to\s+quit)'] },
   { regex = ['(?mi-u:^[ \t]*Question[ \t]+[0-9]+(?:[ \t]*/[ \t]*[0-9]+|[ \t]+of[ \t]+[0-9]+)(?:[ \t:]|$))'] },
 ]
 
@@ -231,8 +235,8 @@ not = [
   { regex = ['(?i-u:do\s+you\s+trust\s+the\s+contents\s+of\s+this\s+directory\?)'] },
   { regex = ['(?i-u:Update\s+available(?:!|\s+·))'] },
   { regex = ['(?i-u:press\s+enter\s+to\s+continue)'] },
-  { contains = ["esc dismiss"] },
-  { contains = ["q to quit"] },
+  { regex = ['(?i-u:esc\s+dismiss)'] },
+  { regex = ['(?i-u:q\s+to\s+quit)'] },
   { regex = ['(?mi-u:^[ \t]*Question[ \t]+[0-9]+(?:[ \t]*/[ \t]*[0-9]+|[ \t]+of[ \t]+[0-9]+)(?:[ \t:]|$))'] },
 ]
 

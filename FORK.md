@@ -603,10 +603,13 @@ whitespace. Arbitrary continuation lines, extra output, bare separators, and
 unrecognized shortcut tails are rejected. Unsupported wrapping stays unknown;
 the old hand-split "60-col captures" were not real captures and are removed.
 
-Numbered Yes/No pairs and anchored picker navigation controls block input,
-including the live `enter select · esc back` footer. Existing composer dialog
-gates accept line-wrapped wording and the newer update heading. Bare transcript
-mentions of `[Pasted text`, `enter select`, and `esc close` no longer veto idle.
+Numbered two-option Yes/No menus, three-option exec approvals (Yes, proceed /
+Yes, and don't ask again / No), and picker navigation controls block input only
+when those options or controls end the detection buffer, including the live
+`enter select · esc back` footer. Transcript lists and full-line key hints
+above a live composer or working timer do not trigger this menu guard.
+Existing composer dialog gates accept line-wrapped wording and the newer update
+heading. Bare transcript mentions of `[Pasted text` no longer veto idle.
 An unrecognized empty-composer layout returns Unknown before the retained OSC
 idle title can bypass a failed screen match. The global known-agent Idle
 fallback is unchanged: Earshot's `session-answer.ts` explicitly refuses
@@ -628,6 +631,22 @@ warning-summary variants are regression inputs, not newly observed live states.
 The isolated override and temporary session are removed after validation; the
 pre-existing global Codex override is untouched. No build, installation, or
 live handoff is claimed here.
+
+Round 4 (Claude review) adds end-of-buffer anchors to the menu guard, removes
+unverified dialog-above-composer fixtures, and covers transcript Yes/No lists
+and bare navigation hints in both Idle and Working states. The exec-approval
+fixtures use Codex's three options, including a selected second or third option;
+two-option cases are explicitly synthetic alternatives. The remaining
+`esc dismiss` and `q to quit` composer vetoes now tolerate wrapped whitespace.
+Repeated hot-reload smoke with the same versions verified Idle → review picker
+Blocked → Idle; evidence is under `/private/tmp/ql390-r4/`. The disposable
+session and its isolated override were removed.
+
+**Deployment follow-up:** the guest override at
+`~/.config/herdr/agent-detection/codex.toml` (`2026.09.30.1`) shadows the bundled
+Codex manifest. Installing this source alone will not activate the new rules:
+the override must be updated or retired and manifests reloaded as a separate
+deployment action. This PR leaves that file untouched.
 
 ## Installed
 

@@ -434,15 +434,44 @@ fn ql390_codex_background_terminal_idle_and_blockers() {
             assert!(result.visible_working && !result.visible_idle, "{screen:?}");
         }
 
-        // Realistic permission, picker, and update layouts: controls may appear
-        // above a retained composer, below its footer, or without a composer.
+        // Menu-shaped prose above the live composer/activity is history, even
+        // when it occupies full lines rather than appearing mid-sentence.
+        for history in [
+            "• Choose an answer:\n  1. Yes — push the branch\n  2. No — keep it local\n",
+            "• The old key hint was:\n  enter select · esc close\n",
+            "• The old update hint was:\n  enter continue · esc skip\n",
+            "• The old approval options were:\n  1. Yes, proceed (y)\n  2. Yes, and don't ask again for commands that start with `git status` (a)\n  3. No, and tell Codex what to do differently (esc)\n",
+        ] {
+            for activity in ["", "• Working (12s • esc to interrupt)\n"] {
+                let screen = format!("{history}{activity}{capture}");
+                for title in ["", "Codex | herdr"] {
+                    let result = evaluate(&screen, title);
+                    let working = !activity.is_empty();
+                    assert_eq!(
+                        result.state,
+                        if working { AgentState::Working } else { AgentState::Idle },
+                        "{screen:?}"
+                    );
+                    assert!(!result.visible_blocker, "{screen:?}");
+                    assert_eq!(result.visible_idle, !working, "{screen:?}");
+                    assert_eq!(result.visible_working, working, "{screen:?}");
+                }
+            }
+        }
+
+        // Only the bottom review picker was captured live. These permission
+        // and update screens are regression inputs below the composer, not
+        // evidence for dialogs above a retained composer.
+        let exec_options = "  1. Yes, proceed (y)\n  2. Yes, and don't ask again for commands that start with `git status` (a)\n  3. No, and tell Codex what to do differently (esc)\n";
         for dialog in [
-            "Allow command?\ngit status\n  › 1. Yes, run command (y)\n    2. No, cancel (n)\n",
-            "Would you like to run the following command?\n$ git status\n  › 1. Yes, proceed (y)\n    2. No, and tell Codex what to do differently (esc)\n",
+            "Would you like to run the following command?\n$ git status\n  › 1. Yes, proceed (y)\n    2. Yes, and don't ask again for commands that start with `git status` (a)\n    3. No, and tell Codex what to do differently (esc)\n\nPress enter to confirm or esc to cancel\n",
             "Would you\nlike to run this command?\n$ git status\n",
             "Do you trust the contents\nof this directory?\n",
             "Waiting for\npermission\n",
             "Press enter to\nconfirm or esc to cancel\n",
+            "esc\ndismiss\n",
+            "q to\nquit\n",
+            // Synthetic two-option alternatives; exec approval has three.
             "  › 1. Yes\n    2. No\n",
             "  ❯ 1. Yes\n    2. No\n",
             "Select a review preset\n\n› 1. Review against a base branch  (PR Style)\n  2. Review uncommitted changes\n  3. Review a commit\n  4. Custom review instructions\n\n  enter select · esc back\n",
@@ -452,8 +481,25 @@ fn ql390_codex_background_terminal_idle_and_blockers() {
             "Choose a task\n  › 1. first task\n    2. second task\n  ↑↓ navigate · enter select · esc close\n",
             "Choose a task\n  navigate · enter select · esc close\n",
             "Update available · 0.157.0 → 0.158.0\n  › 1. Update now\n    2. Skip\n    3. Skip until next version\n  enter continue · esc skip\n",
+            exec_options,
         ] {
-            for screen in [format!("{dialog}{capture}"), format!("{composer}{dialog}")] {
+            let screen = format!("{composer}{dialog}");
+            for title in ["", "Codex | herdr"] {
+                let result = evaluate(&screen, title);
+                assert_eq!(result.state, AgentState::Blocked, "{screen:?}");
+                assert!(result.visible_blocker && !result.visible_idle, "{screen:?}");
+            }
+        }
+        // The bottom menu guard must handle all three exec selections even
+        // without a question/header or the existing confirmation-footer rule.
+        for selected in [1, 2, 3] {
+            let options =
+                exec_options.replace(&format!("  {selected}."), &format!("› {selected}."));
+            for screen in [
+                options.clone(),
+                format!("{options}\n  "),
+                options.replace('\n', "\r\n"),
+            ] {
                 for title in ["", "Codex | herdr"] {
                     let result = evaluate(&screen, title);
                     assert_eq!(result.state, AgentState::Blocked, "{screen:?}");
