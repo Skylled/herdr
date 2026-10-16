@@ -37,11 +37,12 @@ live; QL-283 is closed.
 | 12 | Grow-only headless geometry; agy 1.3.5 width and file-access rules | QL-390 | `origin/master` (fork PR 14, `60f78b03`) | yes, fork.8; also included in fork.9 | bug report |
 | 13 | Input-ready background tasks in agy and Claude; fork process override | QL-390 | `origin/master` (fork PR 16) | yes, fork.9 on disk; live handoff pending | Claude shell rule already removed upstream; agy bug report |
 | 14 | Live-handoff screen recovery and wrapped agy trust | QL-390 | `origin/master` (fork PR 18) | yes, fork.9 on disk; live handoff pending | bug report |
+| 15 | Exact Codex shortcuts/warnings footer and conservative menu guards | QL-390 | fork PR 20, this branch | source only; not installed by this PR | bug report |
 
-The fourteen entries comprise twelve behavioural fixes (1, 2, 3, 5, 6, 9, 10,
-11, 12, 13, 14, and the superseded 4), one fork-identity feature (7), and one
+The fifteen entries comprise thirteen behavioural fixes (1, 2, 3, 5, 6, 9, 10,
+11, 12, 13, 14, 15, and the superseded 4), one fork-identity feature (7), and one
 test-only commit (8). Entry 13 also carries fork process guidance. The older
-"build branch" records predate 2026-10-02; entries 12–14 record PRs 14, 16, and 18.
+"build branch" records predate 2026-10-02; entries 12–15 record PRs 14, 16, 18, and 20.
 **`origin/master` is now the build line**: it contains all of `codex/rebase-upstream-2026-09-21` plus fork PRs 2–5,
 and `fork.9` is built from its merged QL-390 fixes (see [Installed](#installed)). Fork PR 2
 (`139e4d84`, `c4320480`) also changed the agy, opencode and codex manifests. It
@@ -591,6 +592,71 @@ published agy manifests are both `2026.10.15.4` and retain PR 16's background-ta
 idle rules. Claude's PR 16 shell-only working-rule removal is also included.
 Private protocol remains 22. These patches are installed on disk in fork.9;
 server adoption remains Kyle's separate live-handoff step.
+
+### 15. Exact Codex shortcuts/warnings footer — QL-390
+
+[Fork PR 20](https://github.com/Skylled/herdr/pull/20), round 3, advances both
+Codex manifests to `2026.10.16.1`. After the empty composer and a nonempty
+model/cwd footer, only an optional `? for shortcuts` line is allowed. Its only
+optional suffix is `⚠ N warning(s) · f2 to view`, followed by horizontal
+whitespace. Arbitrary continuation lines, extra output, bare separators, and
+unrecognized shortcut tails are rejected. Unsupported wrapping stays unknown;
+the old hand-split "60-col captures" were not real captures and are removed.
+
+Numbered two-option Yes/No menus, three-option exec approvals (Yes, proceed /
+Yes, and don't ask again / No), and picker navigation controls block input only
+when those options or controls end the detection buffer, including the live
+`enter select · esc back` footer. Transcript lists and full-line key hints
+above a live composer or working timer do not trigger this menu guard.
+Existing composer dialog gates accept line-wrapped wording and the newer update
+heading. Bare transcript mentions of `[Pasted text` no longer veto idle.
+An unrecognized empty-composer layout returns Unknown before the retained OSC
+idle title can bypass a failed screen match. The global known-agent Idle
+fallback is unchanged: Earshot's `session-answer.ts` explicitly refuses
+`default_known_agent_idle_fallback`, and `session-list.ts` demotes it to unknown.
+
+Upstream was fetched on 2026-10-16 (`143bf5fd`). Its latest Codex manifest
+(`2026.10.11.1`) handles the update chooser but has no fix for this footer.
+Tests cover both manifest copies, warning counts 1/2/10/123, CRLF, extra output
+at multiple indentations, malformed tails, real-shaped dialogs, and OSC-title
+bypass. QL-390 explicitly requests these bundled-screen regression tests.
+
+Live smoke used installed Herdr `0.9.1+fork.9` and Codex `0.162.1` in disposable
+session `ql390-r3-0055`, with isolated config/state and manifest hot reload.
+The initial composer matched visible Idle. The real review picker initially
+matched OSC Idle; after the guard it matched visible Blocked, then returned to
+visible Idle on dismissal. Detection text, ANSI, and explain evidence is under
+`/private/tmp/ql390-r3/`. No model turn was submitted: working/background and
+warning-summary variants are regression inputs, not newly observed live states.
+The isolated override and temporary session are removed after validation; the
+pre-existing global Codex override is untouched. No build, installation, or
+live handoff is claimed here.
+
+Round 4 (Claude review) adds end-of-buffer anchors to the menu guard, removes
+unverified dialog-above-composer fixtures, and covers transcript Yes/No lists
+and bare navigation hints in both Idle and Working states. The exec-approval
+fixtures use Codex's three options, including a selected second or third option;
+two-option cases are explicitly synthetic alternatives. The remaining
+`esc dismiss` and `q to quit` composer vetoes now tolerate wrapped whitespace.
+Repeated hot-reload smoke with the same versions verified Idle → review picker
+Blocked → Idle; evidence is under `/private/tmp/ql390-r4/`. The disposable
+session and its isolated override were removed.
+
+Round 5 adds idle-only vetoes for `yes, proceed` (including wrapped whitespace)
+and selected numbered-option lines. Unverified menus above the composer now
+fall to Unknown rather than Idle or Blocked. Ordinary prose Yes/No lists and
+key hints still allow Idle; literal approval wording is conservatively Unknown
+even in quoted history. The same approval text does not override a live working
+timer. Tests cover two- and three-option layouts, CRLF, and retained idle titles.
+Isolated hot reload again preserved Idle → review picker Blocked → Idle on
+Herdr `0.9.1+fork.9` / Codex `0.162.1`; evidence is under
+`/private/tmp/ql390-r5/`. The temporary session and override were removed.
+
+**Deployment follow-up:** the guest override at
+`~/.config/herdr/agent-detection/codex.toml` (`2026.09.30.1`) shadows the bundled
+Codex manifest. Installing this source alone will not activate the new rules:
+the override must be updated or retired and manifests reloaded as a separate
+deployment action. This PR leaves that file untouched.
 
 ## Installed
 

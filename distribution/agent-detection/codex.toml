@@ -1,7 +1,7 @@
 id = "codex"
-version = "2026.09.30.1"
+version = "2026.10.16.1"
 min_engine_version = 3
-updated_at = "2026-09-30T00:00:00Z"
+updated_at = "2026-10-16T00:00:00Z"
 
 [[rules]]
 id = "queued_question_working"
@@ -88,6 +88,22 @@ regex = [
   '(?:Press enter to continue|(?m:^[ \t]*)enter continue(?: · [^\r\n]*)?)\s*\z',
 ]
 
+# These controls must end the detection buffer: the same lines in transcript
+# history above a live composer or working timer are not an active menu.
+# Support two-option Yes/No menus and Codex's three-option exec approval
+# (Yes, proceed / Yes, and don't ask again / No, and tell Codex).
+[[rules]]
+id = "live_menu_blocked"
+state = "blocked"
+priority = 925
+region = "whole_recent"
+visible_blocker = true
+any = [
+  { regex = ['(?mi:^[ \t]*[›❯]?[ \t]*1\.[ \t]+Yes\b[^\r\n]*\r?\n(?:[ \t]*[›❯]?[ \t]*2\.[ \t]+Yes\b[^\r\n]*\r?\n[ \t]*[›❯]?[ \t]*3|[ \t]*[›❯]?[ \t]*2)\.[ \t]+No\b[^\r\n]*(?:\r?\n[ \t]*)*\z)'] },
+  { regex = ['(?mi:^[ \t]*(?:(?:↑↓[ \t]+)?navigate[ \t]+·[ \t]+)?enter\s+select[ \t]+·[ \t]+esc\s+(?:close|back)[ \t]*(?:\r?\n[ \t]*)*\z)'] },
+  { regex = ['(?mi-u:^[ \t]*enter\s+continue\s+·\s+esc\s+skip[ \t]*(?:\r?\n[ \t]*)*\z)'] },
+]
+
 [[rules]]
 id = "live_strong_blocker"
 state = "blocked"
@@ -146,6 +162,9 @@ not = [
 # across the detection snapshot; stale controls can conservatively refuse idle.
 # The higher-priority guards also prevent the retained OSC idle rule from
 # bypassing these vetoes while this composer is visible.
+# QL-390: permit only the optional shortcuts line and its warning summary.
+# No generic footer continuation: arbitrary output and menu options must not
+# become input-ready. Unrecognized composer tails also veto the OSC idle rule.
 
 [[rules]]
 id = "live_prompt_blocked"
@@ -155,22 +174,22 @@ region = "whole_recent"
 visible_blocker = true
 all = [{ regex = ['(?m)^›(?:[ \t]+|[\u2800-\u28FF])[ \t]*Ask Codex to do anything[ \t]*\r?$'] }]
 any = [
-  { contains = ["enter to submit"] },
-  { contains = ["press enter to confirm"] },
-  { contains = ["esc to cancel"] },
-  { contains = ["enter to select"] },
-  { contains = ["allow command?"] },
-  { contains = ["do you want to"] },
-  { contains = ["would you like to"] },
+  { regex = ['(?i-u:enter\s+to\s+submit)'] },
+  { regex = ['(?i-u:press\s+enter\s+to\s+confirm)'] },
+  { regex = ['(?i-u:esc\s+to\s+cancel)'] },
+  { regex = ['(?i-u:enter\s+to\s+select)'] },
+  { regex = ['(?i-u:allow\s+command\?)'] },
+  { regex = ['(?i-u:do\s+you\s+want\s+to)'] },
+  { regex = ['(?i-u:would\s+you\s+like\s+to)'] },
   { contains = ["[y/n]"] },
   { contains = ["yes (y)"] },
-  { contains = ["waiting for permission"] },
-  { contains = ["action required"] },
-  { contains = ["do you trust the contents of this directory?"] },
-  { contains = ["update available!"] },
-  { contains = ["press enter to continue"] },
-  { contains = ["esc dismiss"] },
-  { contains = ["q to quit"] },
+  { regex = ['(?i-u:waiting\s+for\s+permission)'] },
+  { regex = ['(?i-u:action\s+required)'] },
+  { regex = ['(?i-u:do\s+you\s+trust\s+the\s+contents\s+of\s+this\s+directory\?)'] },
+  { regex = ['(?i-u:Update\s+available(?:!|\s+·))'] },
+  { regex = ['(?i-u:press\s+enter\s+to\s+continue)'] },
+  { regex = ['(?i-u:esc\s+dismiss)'] },
+  { regex = ['(?i-u:q\s+to\s+quit)'] },
   { regex = ['(?mi-u:^[ \t]*Question[ \t]+[0-9]+(?:[ \t]*/[ \t]*[0-9]+|[ \t]+of[ \t]+[0-9]+)(?:[ \t:]|$))'] },
 ]
 
@@ -195,28 +214,41 @@ state = "idle"
 priority = 200
 region = "whole_recent"
 visible_idle = true
-regex = ['(?m)^›[ \t]+Ask Codex to do anything[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]{2,}[^›\r\n]+ · [^›\r\n]+(?:\r?\n[ \t]*)*\z']
+regex = ['(?m)^›[ \t]+Ask Codex to do anything[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]{2,}[^›\r\n]+ · [^\s›][^›\r\n]*(?:\r?\n[ \t]*\?[ \t]+for shortcuts(?:[ \t]+⚠[ \t]+[0-9]+[ \t]+warnings?[ \t]+·[ \t]+f2 to view)?[ \t]*)?(?:\r?\n[ \t]*)*\z']
 not = [
+  # Unverified menus above the composer refuse idle without claiming a blocker.
+  { regex = ['(?i-u:yes,\s+proceed)'] },
+  { regex = ['(?mi:^[ \t]*[›❯][ \t]*[0-9]+\.[ \t])'] },
   { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
   { regex = ['(■|⬝){4,}'] },
   { regex = ['(?i-u:\b(?:esc|ctrl\+c)(?:\s+again)?(?:\s+to)?\s+interrupt\b|\bto\s+interrupt\b)'] },
   { regex = ['(?m)^[ \t]*(?:[•◦][ \t]+)?[^ \t\r\n›•◦■✗✓─][^\r\n]* \((?:[0-9]+[hm] )*[0-9]+s(?:[^\r\n]*)?\)[^\r\n]*$'] },
   { regex = ['(?i-u:Queued\s+follow-up\s+inputs|Messages\s+to\s+be\s+submitted\s+(?:after\s+next\s+tool\s+call|at\s+end\s+of\s+turn)|edit\s+last\s+queued\s+message)'] },
-  { contains = ["enter to submit"] },
-  { contains = ["press enter to confirm"] },
-  { contains = ["esc to cancel"] },
-  { contains = ["enter to select"] },
-  { contains = ["allow command?"] },
-  { contains = ["do you want to"] },
-  { contains = ["would you like to"] },
+  { regex = ['(?i-u:enter\s+to\s+submit)'] },
+  { regex = ['(?i-u:press\s+enter\s+to\s+confirm)'] },
+  { regex = ['(?i-u:esc\s+to\s+cancel)'] },
+  { regex = ['(?i-u:enter\s+to\s+select)'] },
+  { regex = ['(?i-u:allow\s+command\?)'] },
+  { regex = ['(?i-u:do\s+you\s+want\s+to)'] },
+  { regex = ['(?i-u:would\s+you\s+like\s+to)'] },
   { contains = ["[y/n]"] },
   { contains = ["yes (y)"] },
-  { contains = ["waiting for permission"] },
-  { contains = ["action required"] },
-  { contains = ["do you trust the contents of this directory?"] },
-  { contains = ["update available!"] },
-  { contains = ["press enter to continue"] },
-  { contains = ["esc dismiss"] },
-  { contains = ["q to quit"] },
+  { regex = ['(?i-u:waiting\s+for\s+permission)'] },
+  { regex = ['(?i-u:action\s+required)'] },
+  { regex = ['(?i-u:do\s+you\s+trust\s+the\s+contents\s+of\s+this\s+directory\?)'] },
+  { regex = ['(?i-u:Update\s+available(?:!|\s+·))'] },
+  { regex = ['(?i-u:press\s+enter\s+to\s+continue)'] },
+  { regex = ['(?i-u:esc\s+dismiss)'] },
+  { regex = ['(?i-u:q\s+to\s+quit)'] },
   { regex = ['(?mi-u:^[ \t]*Question[ \t]+[0-9]+(?:[ \t]*/[ \t]*[0-9]+|[ \t]+of[ \t]+[0-9]+)(?:[ \t:]|$))'] },
 ]
+
+# A retained title cannot turn an unsupported composer tail into a prompt.
+# This is local to the empty composer; the engine's known-agent fallback stays
+# unchanged (Earshot refuses default_known_agent_idle_fallback).
+[[rules]]
+id = "live_prompt_unclassified"
+state = "unknown"
+priority = 150
+region = "whole_recent"
+regex = ['(?m)^›[ \t]+Ask Codex to do anything[ \t]*\r?$']
