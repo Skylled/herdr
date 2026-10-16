@@ -440,7 +440,6 @@ fn ql390_codex_background_terminal_idle_and_blockers() {
             "• Choose an answer:\n  1. Yes — push the branch\n  2. No — keep it local\n",
             "• The old key hint was:\n  enter select · esc close\n",
             "• The old update hint was:\n  enter continue · esc skip\n",
-            "• The old approval options were:\n  1. Yes, proceed (y)\n  2. Yes, and don't ask again for commands that start with `git status` (a)\n  3. No, and tell Codex what to do differently (esc)\n",
         ] {
             for activity in ["", "• Working (12s • esc to interrupt)\n"] {
                 let screen = format!("{history}{activity}{capture}");
@@ -449,7 +448,11 @@ fn ql390_codex_background_terminal_idle_and_blockers() {
                     let working = !activity.is_empty();
                     assert_eq!(
                         result.state,
-                        if working { AgentState::Working } else { AgentState::Idle },
+                        if working {
+                            AgentState::Working
+                        } else {
+                            AgentState::Idle
+                        },
                         "{screen:?}"
                     );
                     assert!(!result.visible_blocker, "{screen:?}");
@@ -490,6 +493,31 @@ fn ql390_codex_background_terminal_idle_and_blockers() {
                 assert!(result.visible_blocker && !result.visible_idle, "{screen:?}");
             }
         }
+        // Defensive, unverified above-composer layouts are Unknown, never an
+        // actionable Idle or a false Blocker. Approval wording is conservative
+        // even in quoted history; ordinary prose lists above remain Idle.
+        for menu in [
+            "  › 1. Yes\n    2. No\n",
+            "  1. Yes\n  ❯ 2. No\n",
+            "  › 1. Yes, proceed (y)\n  2. Yes, and don't ask again for commands that start with `git status` (a)\n  3. No, and tell Codex what to do differently (esc)\n",
+            exec_options,
+            "  1. Yes,\n     proceed (y)\n  2. No\n",
+        ] {
+            for screen in [format!("{menu}\n{capture}"), format!("{menu}\n{capture}").replace('\n', "\r\n")] {
+                for title in ["", "Codex | herdr"] {
+                    let result = evaluate(&screen, title);
+                    assert_eq!(result.state, AgentState::Unknown, "{screen:?}");
+                    assert!(!result.visible_idle && !result.visible_blocker, "{screen:?}");
+                    assert!(!result.visible_working, "{screen:?}");
+                }
+            }
+        }
+        // The same approval history must not override a genuine working turn.
+        let screen = format!("{exec_options}• Working (12s • esc to interrupt)\n{capture}");
+        let result = evaluate(&screen, "");
+        assert_eq!(result.state, AgentState::Working);
+        assert!(result.visible_working && !result.visible_blocker);
+
         // The bottom menu guard must handle all three exec selections even
         // without a question/header or the existing confirmation-footer rule.
         for selected in [1, 2, 3] {

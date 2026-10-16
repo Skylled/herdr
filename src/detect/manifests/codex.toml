@@ -216,6 +216,9 @@ region = "whole_recent"
 visible_idle = true
 regex = ['(?m)^›[ \t]+Ask Codex to do anything[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]{2,}[^›\r\n]+ · [^\s›][^›\r\n]*(?:\r?\n[ \t]*\?[ \t]+for shortcuts(?:[ \t]+⚠[ \t]+[0-9]+[ \t]+warnings?[ \t]+·[ \t]+f2 to view)?[ \t]*)?(?:\r?\n[ \t]*)*\z']
 not = [
+  # Unverified menus above the composer refuse idle without claiming a blocker.
+  { regex = ['(?i-u:yes,\s+proceed)'] },
+  { regex = ['(?mi:^[ \t]*[›❯][ \t]*[0-9]+\.[ \t])'] },
   { regex = ['[\u2800-\u28FF\x{25D0}-\x{25D3}]'] },
   { regex = ['(■|⬝){4,}'] },
   { regex = ['(?i-u:\b(?:esc|ctrl\+c)(?:\s+again)?(?:\s+to)?\s+interrupt\b|\bto\s+interrupt\b)'] },

@@ -642,6 +642,16 @@ Repeated hot-reload smoke with the same versions verified Idle → review picker
 Blocked → Idle; evidence is under `/private/tmp/ql390-r4/`. The disposable
 session and its isolated override were removed.
 
+Round 5 adds idle-only vetoes for `yes, proceed` (including wrapped whitespace)
+and selected numbered-option lines. Unverified menus above the composer now
+fall to Unknown rather than Idle or Blocked. Ordinary prose Yes/No lists and
+key hints still allow Idle; literal approval wording is conservatively Unknown
+even in quoted history. The same approval text does not override a live working
+timer. Tests cover two- and three-option layouts, CRLF, and retained idle titles.
+Isolated hot reload again preserved Idle → review picker Blocked → Idle on
+Herdr `0.9.1+fork.9` / Codex `0.162.1`; evidence is under
+`/private/tmp/ql390-r5/`. The temporary session and override were removed.
+
 **Deployment follow-up:** the guest override at
 `~/.config/herdr/agent-detection/codex.toml` (`2026.09.30.1`) shadows the bundled
 Codex manifest. Installing this source alone will not activate the new rules:
