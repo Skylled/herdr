@@ -733,7 +733,7 @@ herdr agent wait w1:p1 --until blocked
 }
 ```
 
-可选的 `permission_dialog` 字段描述识别出的 Muse 或 Antigravity 权限对话框，包含 `kind`、`question`、`target_text`、`raw_text`，以及带有 `label`、`selected` 和 `scope` 的编号 `options`。作用范围区分 `once`、`conversation`、`session`、`workspace`、`persistent`、`deny` 和 `unknown`。保留屏幕换行；`target_text` 是屏幕文本，不是可执行命令。无法提取或内容不完整时返回 null。此只读字段不会回答对话框。
+可选的 `permission_dialog` 字段描述识别出的 Muse 或 Antigravity 权限对话框，包含 `kind`、`question`、`target_text`、`raw_text`，以及带有 `label`、`selected` 和 `scope` 的编号 `options`。作用范围区分 `once`、`conversation`、`session`、`workspace`、`persistent`、`deny` 和 `unknown`。保留屏幕换行；`target_text` 是屏幕文本，不是可执行命令。无法提取或内容不完整时返回 null。此只读字段不会回答对话框。 URL/tool 的批准作用范围在真实捕获验证前保持为 `unknown`。终端输出可能已经被截断；保留换行不保证目标内容完整。
 
 响应包含与 `herdr agent explain --json` 打印的相同的 explain 对象,包括最终状态、清单来源和版本、匹配的规则、已评估规则的证据、跳过状态原因、idle 回退原因,以及当完整生命周期钩子权威使屏幕规则不再权威时的 `screen_detection_skip_reason`。
 

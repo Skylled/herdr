@@ -1,5 +1,5 @@
 id = "muse"
-version = "2026.10.19.1"
+version = "2026.10.19.2"
 min_engine_version = 2
 updated_at = "2026-10-19T00:00:00Z"
 aliases = ["muse-code", "muse-cli"]
@@ -46,12 +46,7 @@ state = "blocked"
 priority = 980
 region = "whole_recent"
 visible_blocker = true
-line_regex = [
-  '^\s*Would you like to run the following command\?\s*$',
-  '^\s*[›⟩❯]?\s*1\. Yes, proceed \(y\)\s*$',
-  '^\s*[›⟩❯]?\s*2\. No, and tell Muse Code what to do differently \(esc\)\s*$',
-]
-regex = ['(?m)^[ \t]*Change approval defaults in /permissions[ \t]*\r?\n[─ \t]+\r?\n[^\r\n]* · [^\r\n]*(?:\r?\n[ \t]*)*\z']
+regex = ['(?m)^[ \t]*Would\s+you\s+like\s+to\s+run\s+the\s+following\s+command\?[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*\$[^\r\n]*\r?\n(?:[^\r\n]*\r?\n)*?[ \t]*[›⟩❯]?[ \t]*1\.\s+Yes,\s+proceed\s+\(y\)\s+[›⟩❯]?\s*2\.\s+No,\s+and\s+tell\s+Muse\s+Code\s+what\s+to\s+do\s+differently\s+\(esc\)\s+Change\s+approval\s+defaults\s+in\s+/permissions[ \t]*\r?\n[─ \t]+\r?\n[^\r\n]* · [^\r\n]*(?:\r?\n[ \t]*)*\z']
 
 [[rules]]
 id = "workspace_trust_blocked"

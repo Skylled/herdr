@@ -39,15 +39,40 @@ URL/tool variants and current CLI approval transitions remain unverified.
 
 Supporting debug-profile test `ql416_detection_scale_profile` evaluates populated
 100-row transcripts at 1 and 15 panes, comparing the previous rules with the
-candidate. Microseconds per complete polling pass, one sample (not release CPU
+review-fix candidate. Microseconds per complete polling pass, one sample (not release CPU
 or a CI threshold):
 
 | Agent | Panes | Previous | Candidate | Delta |
 | --- | ---: | ---: | ---: | ---: |
-| Muse | 1 | 172.40 | 231.52 | +59.12 |
-| Muse | 15 | 2657.02 | 3423.83 | +766.81 |
-| agy | 1 | 550.31 | 659.23 | +108.92 |
-| agy | 15 | 8171.91 | 9972.68 | +1800.77 |
+| Muse | 1 | 162.51 | 177.21 | +14.70 |
+| Muse | 15 | 2455.08 | 2650.29 | +195.21 |
+| agy | 1 | 509.35 | 617.55 | +108.20 |
+| agy | 15 | 7628.32 | 9288.86 | +1660.54 |
 
 The cost grows with pane count; no new locks, terminal snapshots, render work,
 or parsing were added to polling. Structured extraction is demand-only.
+
+
+## PR 21 review follow-up (QL-416)
+
+Muse's option scan starts at the last real `1. Yes, proceed (y)` control before
+its permission footer, after the displayed `$` command. Derived adversarial
+probes contain `Navigate`, numbered heredoc rows, and even a command row equal
+to that first control; these are command text, never options. Derived narrow
+probes wrap the question, denial label and footer at word boundaries. A single
+contiguous match requires the question, command, adjacent options and live tail;
+a quoted transcript with visible quote prefixes or disconnected options cannot
+claim the named rule. Identical verbatim UI text cannot be distinguished from a
+real dialog using text alone.
+
+URL/tool approving choices now all publish `unknown` scope, including the
+illustrative always option. No live evidence establishes their approval lifetime.
+`Reason:` stops target extraction for all agy kinds. Target text remains
+**display-only**: wrapped paths keep their newlines and indentation, and clipping
+that happened before the detection snapshot cannot be detected or recovered.
+Tests extract from the winning rule's region, as production does.
+
+No additional live blocked smoke was performed during this review follow-up.
+The requested screen-classifying fixture tests differ from AGENTS.md's
+engine-only detection-test policy; this policy/exception question is explicitly
+left for Kyle in PR 21. Policy files are unchanged.

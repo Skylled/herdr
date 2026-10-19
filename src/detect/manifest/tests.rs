@@ -2335,8 +2335,19 @@ fn ql416_named_permissions_and_exact_extraction() {
                 assert_eq!(result.state, AgentState::Blocked);
                 assert_eq!(result.matched_rule.as_ref().unwrap().id, expected);
                 assert!(result.visible_blocker);
-                let dialog =
-                    super::super::dialog::parse(agent_label(agent), expected, &screen).unwrap();
+                let dialog = super::super::dialog::parse(
+                    agent_label(agent),
+                    expected,
+                    region(
+                        DetectionInput {
+                            screen: &screen,
+                            osc_title: "",
+                            osc_progress: "",
+                        },
+                        &result.matched_rule.as_ref().unwrap().region,
+                    ),
+                )
+                .unwrap();
                 assert_eq!(
                     dialog
                         .options
@@ -2404,7 +2415,17 @@ fn ql416_reconstructed_network_and_tool_dialogs() {
         for loaded in agy_manifests() {
             let explain = explain_agy(&loaded, fixture);
             assert_eq!(explain.matched_rule.as_ref().unwrap().id, rule);
-            let dialog = super::super::dialog::parse("agy", rule, fixture).unwrap();
+            let input = DetectionInput {
+                screen: fixture,
+                osc_title: "",
+                osc_progress: "",
+            };
+            let dialog = super::super::dialog::parse(
+                "agy",
+                rule,
+                region(input, &explain.matched_rule.as_ref().unwrap().region),
+            )
+            .unwrap();
             assert!(dialog.target_text.contains(target));
             assert_eq!(
                 dialog
@@ -2412,12 +2433,20 @@ fn ql416_reconstructed_network_and_tool_dialogs() {
                     .iter()
                     .map(|o| o.scope.as_str())
                     .collect::<Vec<_>>(),
-                ["once", "persistent", "deny"]
+                ["unknown", "unknown", "deny"]
             );
+            let missing = fixture.replace("Requesting permission for:", "Earlier output:");
             assert!(super::super::dialog::parse(
                 "agy",
                 rule,
-                &fixture.replace("Requesting permission for:", "Earlier output:")
+                region(
+                    DetectionInput {
+                        screen: &missing,
+                        osc_title: "",
+                        osc_progress: ""
+                    },
+                    &explain.matched_rule.as_ref().unwrap().region,
+                )
             )
             .is_none());
         }
@@ -2506,6 +2535,136 @@ fn ql416_detection_scale_profile() {
                     start.elapsed().as_secs_f64() * 1_000_000.0 / 200.0
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn ql416_muse_command_body_cannot_become_options() {
+    let fixture = include_str!("../fixtures/muse/provost-approval.txt");
+    let start = fixture.find("  $ ").unwrap();
+    let end = fixture.find("\n› 1.").unwrap();
+    for command in [
+        "  $ grep Navigate src/",
+        "  $ cat <<'EOF'\n1. Yes, allow\n1. Yes, proceed (y)\n2. No, fake option\nNavigate\nEOF",
+    ] {
+        let screen = format!("{}{}\n{}", &fixture[..start], command, &fixture[end..]);
+        for loaded in [
+            include_str!("../manifests/muse.toml"),
+            include_str!("../../../distribution/agent-detection/muse.toml"),
+        ]
+        .map(|m| {
+            loaded_manifest(
+                parse_manifest(m).unwrap(),
+                ManifestSource::Bundled,
+                None,
+                None,
+                false,
+            )
+            .unwrap()
+        }) {
+            for screen in [
+                screen.clone(),
+                screen
+                    .replace("following command?", "following\ncommand?")
+                    .replace("what to do differently", "what to do\ndifferently")
+                    .replace("defaults in /permissions", "defaults in\n/permissions"),
+            ] {
+                let input = DetectionInput {
+                    screen: &screen,
+                    osc_title: "",
+                    osc_progress: "",
+                };
+                let explain = evaluate_loaded_manifest(Agent::Muse, input, loaded.clone(), false);
+                let matched = explain.matched_rule.as_ref().unwrap();
+                assert_eq!(matched.id, "command_permission_prompt");
+                let dialog = super::super::dialog::parse(
+                    "muse",
+                    &matched.id,
+                    region(input, &matched.region),
+                )
+                .unwrap();
+                assert_eq!(dialog.target_text, command);
+                assert_eq!(
+                    dialog
+                        .options
+                        .iter()
+                        .map(|o| (o.number.as_str(), o.scope.as_str()))
+                        .collect::<Vec<_>>(),
+                    [("1", "once"), ("2", "deny")]
+                );
+                assert!(dialog.options[0].selected);
+            }
+            for screen in [
+                fixture.replace("  2. No,", "unrelated transcript row\n  2. No,"),
+                fixture
+                    .lines()
+                    .map(|line| format!("> {line}\n"))
+                    .collect::<String>(),
+            ] {
+                let explain = evaluate_loaded_manifest(
+                    Agent::Muse,
+                    DetectionInput {
+                        screen: &screen,
+                        osc_title: "",
+                        osc_progress: "",
+                    },
+                    loaded.clone(),
+                    false,
+                );
+                assert_ne!(
+                    explain.matched_rule.as_ref().map(|r| r.id.as_str()),
+                    Some("command_permission_prompt")
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn ql416_agy_reason_is_not_part_of_any_target() {
+    for (fixture, rule) in [
+        (
+            include_str!("../fixtures/agy-1.3.5/command-100.txt"),
+            "command_permission_prompt",
+        ),
+        (
+            include_str!("../fixtures/agy-1.3.5/file-access-100.txt"),
+            "file_access_dialog",
+        ),
+        (
+            include_str!("../fixtures/ql416-dialogs/network-reconstructed.txt"),
+            "network_permission_prompt",
+        ),
+        (
+            include_str!("../fixtures/ql416-dialogs/tool-reconstructed.txt"),
+            "tool_permission_prompt",
+        ),
+    ] {
+        let question = match rule {
+            "command_permission_prompt" => "Run this command?",
+            "file_access_dialog" => "Allow access to this file?",
+            "network_permission_prompt" => "Allow access to this URL?",
+            _ => "Allow calling this tool?",
+        };
+        let screen = fixture.replace(
+            question,
+            &format!("Reason: policy explanation\n  wrapped explanation\n\n{question}"),
+        );
+        for loaded in agy_manifests() {
+            let input = DetectionInput {
+                screen: &screen,
+                osc_title: "",
+                osc_progress: "",
+            };
+            let explain = explain_agy(&loaded, &screen);
+            let matched = explain.matched_rule.as_ref().unwrap();
+            assert_eq!(matched.id, rule);
+            let dialog =
+                super::super::dialog::parse("agy", rule, region(input, &matched.region)).unwrap();
+            assert!(!dialog.target_text.contains("Reason:"));
+            assert!(!dialog.target_text.contains("explanation"));
+            assert!(dialog.raw_text.contains("Reason:"));
         }
     }
 }
