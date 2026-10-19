@@ -1,7 +1,7 @@
 id = "agy"
-version = "2026.10.15.4"
+version = "2026.10.19.1"
 min_engine_version = 1
-updated_at = "2026-10-15T00:00:00Z"
+updated_at = "2026-10-19T00:00:00Z"
 aliases = ["antigravity", "antigravity-cli"]
 
 # QL-378: the cached 2026.10.05.1 catalog lacks idle detection entirely.
@@ -10,6 +10,48 @@ aliases = ["antigravity", "antigravity-cli"]
 
 # Modern dialogs end in paired navigation/action controls. The paired footer
 # also recognises a tall dialog whose title has scrolled out of the snapshot.
+# QL-416: precise permission names outrank the generic footer fallback.
+# Current command/file evidence is captured; URL/tool variants are reconstructed
+# from the shipped changelog's titles, and require the same live paired controls.
+[[rules]]
+id = "command_permission_prompt"
+state = "blocked"
+priority = 350
+region = "after_last_horizontal_rule"
+visible_blocker = true
+contains = ["Run this command?", "navigate", "tab amend"]
+line_regex = [
+  '(?i)^[> \t]*1\. Yes, run command\b',
+  '(?i)^[> \t]*[2-9][0-9]*\. No, cancel\b',
+]
+regex = ['(?im)^[ \t]*esc to cancel[^\r\n]*(?:\r?\n[ \t]*)*\z']
+
+[[rules]]
+id = "network_permission_prompt"
+state = "blocked"
+priority = 350
+region = "after_last_horizontal_rule"
+visible_blocker = true
+contains = ["Allow access to this URL?", "navigate", "tab amend"]
+line_regex = [
+  '(?i)^[> \t]*1\. Yes, allow\b',
+  '(?i)^[> \t]*[2-9][0-9]*\. No, deny\b',
+]
+regex = ['(?im)^[ \t]*esc to cancel[^\r\n]*(?:\r?\n[ \t]*)*\z']
+
+[[rules]]
+id = "tool_permission_prompt"
+state = "blocked"
+priority = 350
+region = "after_last_horizontal_rule"
+visible_blocker = true
+contains = ["Allow calling this tool?", "navigate", "tab amend"]
+line_regex = [
+  '(?i)^[> \t]*1\. Yes, allow\b',
+  '(?i)^[> \t]*[2-9][0-9]*\. No, deny\b',
+]
+regex = ['(?im)^[ \t]*esc to cancel[^\r\n]*(?:\r?\n[ \t]*)*\z']
+
 [[rules]]
 id = "permission_controls"
 state = "blocked"
@@ -62,10 +104,11 @@ any = [
 [[rules]]
 id = "file_access_dialog"
 state = "blocked"
-priority = 315
-region = "bottom_non_empty_lines(20)"
+priority = 350
+region = "after_last_horizontal_rule"
 visible_blocker = true
 contains = ["allow access to this file?", "esc to cancel"]
+regex = ['(?im)^[ \t]*esc to cancel[^\r\n]*(?:\r?\n[ \t]*)*\z']
 line_regex = [
   '(?i)^[> \t]*[1-9][0-9]*\. Yes, allow access\s*$',
   '(?i)^[> \t]*[1-9][0-9]*\. No, deny access\s*$',

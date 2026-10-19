@@ -1,0 +1,13 @@
+Tool
+────────────────────────────────────────────────────────────
+
+Requesting permission for:
+   example.read_resource({"path":"/tmp/ql416"})
+
+Allow calling this tool?
+> 1. Yes, allow
+  2. Yes, and always allow calling this tool
+  3. No, deny
+
+  ↑/↓ Navigate · tab Amend
+esc to cancel

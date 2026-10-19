@@ -198,6 +198,12 @@ fn print_agent_explain_text(explain: &serde_json::Value, verbose: bool) {
     } else {
         println!("rule: none");
     }
+    if let Some(dialog) = explain
+        .get("permission_dialog")
+        .filter(|value| value.is_object())
+    {
+        println!("permission_dialog: {dialog}");
+    }
     if let Some(reason) = explain["fallback_reason"].as_str() {
         println!("fallback_reason: {reason}");
     }
