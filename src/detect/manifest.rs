@@ -26,6 +26,7 @@ pub struct DetectionInput<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetectionExplain {
+    pub permission_dialog: Option<super::dialog::PermissionDialog>,
     pub agent: Option<String>,
     pub state: AgentState,
     pub source: Option<ManifestSource>,
@@ -387,12 +388,21 @@ pub fn explain_with_input(agent: Agent, input: DetectionInput<'_>) -> DetectionE
     let Some(loaded) = load_manifest(agent) else {
         return fallback_explain(Some(agent), None, true);
     };
-    evaluate_loaded_manifest(agent, input, loaded, true)
+    let mut explain = evaluate_loaded_manifest(agent, input, loaded, true);
+    // Extraction is demand-only: ordinary detection polling never parses dialogs.
+    if explain.state == AgentState::Blocked {
+        if let Some(rule) = &explain.matched_rule {
+            explain.permission_dialog =
+                super::dialog::parse(agent_label(agent), &rule.id, region(input, &rule.region));
+        }
+    }
+    explain
 }
 
 pub fn explain_for_label(agent_label: &str, screen_content: &str) -> DetectionExplain {
     let Some(agent) = parse_agent_label(agent_label) else {
         return DetectionExplain {
+            permission_dialog: None,
             agent: Some(agent_label.to_string()),
             state: AgentState::Unknown,
             source: None,
@@ -505,6 +515,7 @@ fn evaluate_loaded_manifest(
         .flatten();
 
     DetectionExplain {
+        permission_dialog: None,
         agent: Some(agent_label(agent).to_string()),
         state,
         source: Some(loaded.source),
@@ -563,6 +574,7 @@ fn fallback_explain(
         .flatten();
 
     DetectionExplain {
+        permission_dialog: None,
         agent: agent.map(|agent| agent_label(agent).to_string()),
         state: if known_agent {
             AgentState::Idle
@@ -878,6 +890,7 @@ pub fn explain_to_json_value(explain: &DetectionExplain) -> serde_json::Value {
         "remote_update_status": &explain.remote_update_status,
         "remote_update_error": &explain.remote_update_error,
         "matched_rule": matched_rule,
+        "permission_dialog": explain.permission_dialog,
         "visible_idle": explain.visible_idle,
         "visible_blocker": explain.visible_blocker,
         "visible_working": explain.visible_working,
@@ -1484,12 +1497,13 @@ fn above_prompt_box(content: &str) -> &str {
 fn after_last_horizontal_rule(content: &str) -> &str {
     let mut last_rule_end = 0usize;
     let mut offset = 0usize;
-    for line in content.lines() {
-        let next_offset = offset + line.len() + 1;
-        if is_horizontal_rule(line) {
-            last_rule_end = next_offset.min(content.len());
+    // Count the original delimiters: str::lines strips CR in CRLF input,
+    // which otherwise makes the byte offset land inside a Unicode border.
+    for row in content.split_inclusive('\n') {
+        offset += row.len();
+        if is_horizontal_rule(row.trim_end_matches(['\r', '\n'])) {
+            last_rule_end = offset;
         }
-        offset = next_offset;
     }
     &content[last_rule_end..]
 }

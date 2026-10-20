@@ -287,6 +287,7 @@ impl App {
                 "remote_update_status": null,
                 "remote_update_error": null,
                 "matched_rule": null,
+                "permission_dialog": null,
                 "visible_idle": false,
                 "visible_blocker": false,
                 "visible_working": false,

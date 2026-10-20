@@ -1,7 +1,7 @@
 id = "muse"
-version = "2026.10.13.1"
+version = "2026.10.19.2"
 min_engine_version = 2
-updated_at = "2026-10-13T00:00:00Z"
+updated_at = "2026-10-19T00:00:00Z"
 aliases = ["muse-code", "muse-cli"]
 
 # Evidence: live bottom-buffer captures from Muse Code 0.2.1 in Herdr, using a local
@@ -36,6 +36,17 @@ aliases = ["muse-code", "muse-cli"]
 # The exact `Reviewing approval request` label is present in the existing 1.4.6
 # binary-string capture and corroborated by Kyle; its live transition has not
 # been captured. See src/detect/fixtures/muse/README.md for evidence and limits.
+
+# QL-416: captured human command escalation (fixtures/muse/provost-approval.txt).
+# Require the question AND both controls AND the permission footer. The footer
+# must be at the live end, allowing only the closing border and model status.
+[[rules]]
+id = "command_permission_prompt"
+state = "blocked"
+priority = 980
+region = "whole_recent"
+visible_blocker = true
+regex = ['(?m)^[ \t]*Would\s+you\s+like\s+to\s+run\s+the\s+following\s+command\?[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*\$[^\r\n]*\r?\n(?:[^\r\n]*\r?\n)*?[ \t]*[›⟩❯]?[ \t]*1\.\s+Yes,\s+proceed\s+\(y\)\s+[›⟩❯]?\s*2\.\s+No,\s+and\s+tell\s+Muse\s+Code\s+what\s+to\s+do\s+differently\s+\(esc\)\s+Change\s+approval\s+defaults\s+in\s+/permissions[ \t]*\r?\n[─ \t]+\r?\n[^\r\n]* · [^\r\n]*(?:\r?\n[ \t]*)*\z']
 
 [[rules]]
 id = "workspace_trust_blocked"

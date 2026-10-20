@@ -1,0 +1,13 @@
+URL access
+────────────────────────────────────────────────────────────
+
+Requesting permission for:
+   https://example.com/ql416
+
+Allow access to this URL?
+> 1. Yes, allow
+  2. Yes, and always allow access to this URL
+  3. No, deny
+
+  ↑/↓ Navigate · tab Amend
+esc to cancel

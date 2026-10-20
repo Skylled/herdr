@@ -737,6 +737,8 @@ herdr agent wait w1:p1 --until blocked
 }
 ```
 
+任意の `permission_dialog` フィールドは、認識された Muse または Antigravity の権限ダイアログを表します。`kind`、`question`、`target_text`、`raw_text`、および `label`、`selected`、`scope` を持つ番号付き `options` を含みます。スコープは `once`、`conversation`、`session`、`workspace`、`persistent`、`deny`、`unknown` を区別します。表示上の折り返しは保持されます。`target_text` は画面の文字列であり、実行可能なコマンドではありません。抽出できない場合や不完全な場合は null です。この読み取り専用フィールドはダイアログに回答しません。 URL/tool の許可スコープは実際のキャプチャで確認するまで `unknown` です。端末の出力は既に切り詰められている場合があり、折り返しの保持は対象の完全性を保証しません。
+
 レスポンスには `herdr agent explain --json` が出力するのと同じ explain オブジェクトが含まれます: 最終状態、マニフェストのソースとバージョン、マッチしたルール、評価されたルールの証拠、スキップ状態の理由、idle フォールバックの理由、そして完全なライフサイクルフック権威によってスクリーンルールが権威でなくなったときの `screen_detection_skip_reason` です。
 
 クライアントには `agent.explain` をサポートする実行中のサーバーが必要です。Herdr のアップグレード後は、このメソッドに頼る前にサーバーを再起動するかライブハンドオフしてください。

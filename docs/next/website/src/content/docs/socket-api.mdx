@@ -954,6 +954,8 @@ Fields such as `last_check_unix`, `last_result`, `active_version`, `cached_remot
 }
 ```
 
+The optional `permission_dialog` field describes a recognized Muse or Antigravity permission dialog: `kind`, `question`, `target_text`, `raw_text`, and numbered `options` with `label`, `selected`, and `scope`. Scopes distinguish `once`, `conversation`, `session`, `workspace`, `persistent`, `deny`, and `unknown`. Displayed line wraps are preserved; `target_text` is screen text, not an executable command. Missing or incomplete extraction returns null. This read-only field never answers a dialog. URL/tool approval scopes remain `unknown` until verified from real captures. Terminal output may already be clipped; preserved wrapping does not guarantee a complete target.
+
 The response contains the same explain object printed by `herdr agent explain --json`, including the final state, manifest source and version, matched rule, evaluated rule evidence, skip-state reason, idle fallback reason, and `screen_detection_skip_reason` when a full lifecycle hook authority makes screen rules non-authoritative.
 
 Clients need a running server that supports `agent.explain`; after upgrading Herdr, restart or live-handoff the server before relying on this method.

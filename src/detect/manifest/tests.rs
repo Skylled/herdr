@@ -2265,3 +2265,406 @@ fn line_regions_preserve_crlf_unicode_boundaries() {
     assert_eq!(bottom_non_empty_lines(screen, 1), "footer\r\n");
     assert_eq!(bottom_non_empty_lines("", 2), "");
 }
+
+// QL-416 explicitly requests captured-screen regressions for named dialogs.
+#[test]
+fn ql416_named_permissions_and_exact_extraction() {
+    let cases = [
+        (
+            Agent::Muse,
+            "muse",
+            include_str!("../fixtures/muse/provost-approval.txt"),
+            "command_permission_prompt",
+            vec!["once", "deny"],
+        ),
+        (
+            Agent::Antigravity,
+            "antigravity",
+            include_str!("../fixtures/agy-1.3.5/command-100.txt"),
+            "command_permission_prompt",
+            vec!["once", "conversation", "persistent", "deny"],
+        ),
+        (
+            Agent::Antigravity,
+            "antigravity",
+            include_str!("../fixtures/agy-1.3.5/command-60.txt"),
+            "command_permission_prompt",
+            vec!["once", "conversation", "persistent", "deny"],
+        ),
+        (
+            Agent::Antigravity,
+            "antigravity",
+            include_str!("../fixtures/agy-1.3.5/file-access-100.txt"),
+            "file_access_dialog",
+            vec!["once", "persistent", "deny"],
+        ),
+        (
+            Agent::Antigravity,
+            "antigravity",
+            include_str!("../fixtures/agy-1.3.5/file-access-60.txt"),
+            "file_access_dialog",
+            vec!["once", "persistent", "deny"],
+        ),
+    ];
+    for (agent, name, fixture, expected, scopes) in cases {
+        for root in ["src/detect/manifests", "distribution/agent-detection"] {
+            let manifest = std::fs::read_to_string(format!("{root}/{name}.toml")).unwrap();
+            let loaded = loaded_manifest(
+                parse_manifest(&manifest).unwrap(),
+                ManifestSource::Bundled,
+                None,
+                None,
+                false,
+            )
+            .unwrap();
+            for screen in [
+                fixture.to_string(),
+                fixture.replace('\n', "\r\n"),
+                fixture.replace("> 1.", "  1.").replace("  3.", "> 3."),
+            ] {
+                let result = evaluate_loaded_manifest(
+                    agent,
+                    DetectionInput {
+                        screen: &screen,
+                        osc_title: "",
+                        osc_progress: "",
+                    },
+                    loaded.clone(),
+                    false,
+                );
+                assert_eq!(result.state, AgentState::Blocked);
+                assert_eq!(result.matched_rule.as_ref().unwrap().id, expected);
+                assert!(result.visible_blocker);
+                let dialog = super::super::dialog::parse(
+                    agent_label(agent),
+                    expected,
+                    region(
+                        DetectionInput {
+                            screen: &screen,
+                            osc_title: "",
+                            osc_progress: "",
+                        },
+                        &result.matched_rule.as_ref().unwrap().region,
+                    ),
+                )
+                .unwrap();
+                assert_eq!(
+                    dialog
+                        .options
+                        .iter()
+                        .map(|o| o.scope.as_str())
+                        .collect::<Vec<_>>(),
+                    scopes
+                );
+                assert!(dialog.target_text.contains(if name == "muse" {
+                    "$ cd /tmp/ql363"
+                } else if expected == "file_access_dialog" {
+                    "/Users/kyle/Repos/herdr/Cargo.toml"
+                } else {
+                    "printf ql390-command-probe"
+                }));
+                if expected == "command_permission_prompt" && name == "antigravity" {
+                    assert_eq!(dialog.target_text, "   printf ql390-command-probe");
+                    assert_eq!(dialog.options[0].label, "Yes, run command");
+                    assert_eq!(dialog.options[3].label, "No, cancel");
+                    if fixture.contains("commands\nthat") {
+                        assert_eq!(dialog.options[1].label, "Yes, and always allow in this conversation for commands\nthat start with 'printf'");
+                    }
+                }
+                if name == "muse" {
+                    assert!(dialog.target_text.ends_with("    v4.err"));
+                    assert_eq!(dialog.options[0].label, "Yes, proceed (y)");
+                    assert_eq!(
+                        dialog.options[1].label,
+                        "No, and tell Muse Code what to do differently (esc)"
+                    );
+                }
+                assert!(dialog.raw_text.contains(&dialog.question));
+                let mut enriched = result;
+                enriched.permission_dialog = Some(dialog.clone());
+                assert_eq!(
+                    explain_to_json_value(&enriched)["permission_dialog"]["target_text"],
+                    dialog.target_text
+                );
+            }
+            // Required controls are AND gates; ordinary prose and old dialogs
+            // followed by a new composer cannot claim these precise names.
+            for screen in [fixture.replace("1. Yes,", "1. Previously,"), format!("{fixture}\n────────────────────────────────────────────────────────────\n>\n────────────────────────────────────────────────────────────\n? for shortcuts\n")] {
+                let result = evaluate_loaded_manifest(agent, DetectionInput { screen: &screen, osc_title: "", osc_progress: "" }, loaded.clone(), false);
+                assert_ne!(result.matched_rule.as_ref().map(|r| r.id.as_str()), Some(expected));
+            }
+        }
+    }
+}
+
+#[test]
+fn ql416_reconstructed_network_and_tool_dialogs() {
+    // These are explicitly reconstructed, not claims of live CLI compatibility.
+    for (fixture, rule, target) in [
+        (
+            include_str!("../fixtures/ql416-dialogs/network-reconstructed.txt"),
+            "network_permission_prompt",
+            "https://example.com/ql416",
+        ),
+        (
+            include_str!("../fixtures/ql416-dialogs/tool-reconstructed.txt"),
+            "tool_permission_prompt",
+            "example.read_resource",
+        ),
+    ] {
+        for loaded in agy_manifests() {
+            let explain = explain_agy(&loaded, fixture);
+            assert_eq!(explain.matched_rule.as_ref().unwrap().id, rule);
+            let input = DetectionInput {
+                screen: fixture,
+                osc_title: "",
+                osc_progress: "",
+            };
+            let dialog = super::super::dialog::parse(
+                "agy",
+                rule,
+                region(input, &explain.matched_rule.as_ref().unwrap().region),
+            )
+            .unwrap();
+            assert!(dialog.target_text.contains(target));
+            assert_eq!(
+                dialog
+                    .options
+                    .iter()
+                    .map(|o| o.scope.as_str())
+                    .collect::<Vec<_>>(),
+                ["unknown", "unknown", "deny"]
+            );
+            let missing = fixture.replace("Requesting permission for:", "Earlier output:");
+            assert!(super::super::dialog::parse(
+                "agy",
+                rule,
+                region(
+                    DetectionInput {
+                        screen: &missing,
+                        osc_title: "",
+                        osc_progress: ""
+                    },
+                    &explain.matched_rule.as_ref().unwrap().region,
+                )
+            )
+            .is_none());
+        }
+    }
+}
+
+#[test]
+fn horizontal_rule_region_preserves_crlf_byte_boundaries() {
+    for ending in ["\n", "\r\n"] {
+        let screen = format!("prior{ending}─────{ending}body{ending}");
+        assert_eq!(after_last_horizontal_rule(&screen), format!("body{ending}"));
+        assert_eq!(after_last_horizontal_rule("prior\r\n─────"), "");
+    }
+}
+
+// Supporting profile for per-pane rule evaluation; no timing CI threshold.
+#[test]
+#[ignore]
+fn ql416_detection_scale_profile() {
+    for (agent, manifest, fixture) in [
+        (
+            Agent::Muse,
+            include_str!("../manifests/muse.toml"),
+            include_str!("../fixtures/muse/provost-approval.txt"),
+        ),
+        (
+            Agent::Antigravity,
+            include_str!("../manifests/antigravity.toml"),
+            include_str!("../fixtures/agy-1.3.5/command-60.txt"),
+        ),
+    ] {
+        let candidate = parse_manifest(manifest).unwrap();
+        let mut baseline = candidate.clone();
+        baseline.rules.retain(|rule| {
+            !matches!(
+                rule.id.as_str(),
+                "command_permission_prompt"
+                    | "network_permission_prompt"
+                    | "tool_permission_prompt"
+            )
+        });
+        if let Some(file) = baseline
+            .rules
+            .iter_mut()
+            .find(|r| r.id == "file_access_dialog")
+        {
+            file.priority = 315;
+            file.region = "bottom_non_empty_lines(20)".to_string();
+            file.regex.clear();
+        }
+        let screen = format!("{}{fixture}", "ordinary transcript output\n".repeat(100));
+        for panes in [1, 15] {
+            for (label, manifest) in [
+                ("baseline", baseline.clone()),
+                ("candidate", candidate.clone()),
+            ] {
+                let loaded =
+                    loaded_manifest(manifest, ManifestSource::Bundled, None, None, false).unwrap();
+                let input = DetectionInput {
+                    screen: &screen,
+                    osc_title: "",
+                    osc_progress: "",
+                };
+                for _ in 0..20 {
+                    std::hint::black_box(evaluate_loaded_manifest(
+                        agent,
+                        input,
+                        loaded.clone(),
+                        false,
+                    ));
+                }
+                let start = std::time::Instant::now();
+                for _ in 0..200 {
+                    for _ in 0..panes {
+                        std::hint::black_box(evaluate_loaded_manifest(
+                            agent,
+                            input,
+                            loaded.clone(),
+                            false,
+                        ));
+                    }
+                }
+                eprintln!(
+                    "QL-416 {} {label} panes={panes} us/poll={:.2}",
+                    agent_label(agent),
+                    start.elapsed().as_secs_f64() * 1_000_000.0 / 200.0
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn ql416_muse_command_body_cannot_become_options() {
+    let fixture = include_str!("../fixtures/muse/provost-approval.txt");
+    let start = fixture.find("  $ ").unwrap();
+    let end = fixture.find("\n› 1.").unwrap();
+    for command in [
+        "  $ grep Navigate src/",
+        "  $ cat <<'EOF'\n1. Yes, allow\n1. Yes, proceed (y)\n2. No, fake option\nNavigate\nEOF",
+    ] {
+        let screen = format!("{}{}\n{}", &fixture[..start], command, &fixture[end..]);
+        for loaded in [
+            include_str!("../manifests/muse.toml"),
+            include_str!("../../../distribution/agent-detection/muse.toml"),
+        ]
+        .map(|m| {
+            loaded_manifest(
+                parse_manifest(m).unwrap(),
+                ManifestSource::Bundled,
+                None,
+                None,
+                false,
+            )
+            .unwrap()
+        }) {
+            for screen in [
+                screen.clone(),
+                screen
+                    .replace("following command?", "following\ncommand?")
+                    .replace("what to do differently", "what to do\ndifferently")
+                    .replace("defaults in /permissions", "defaults in\n/permissions"),
+            ] {
+                let input = DetectionInput {
+                    screen: &screen,
+                    osc_title: "",
+                    osc_progress: "",
+                };
+                let explain = evaluate_loaded_manifest(Agent::Muse, input, loaded.clone(), false);
+                let matched = explain.matched_rule.as_ref().unwrap();
+                assert_eq!(matched.id, "command_permission_prompt");
+                let dialog = super::super::dialog::parse(
+                    "muse",
+                    &matched.id,
+                    region(input, &matched.region),
+                )
+                .unwrap();
+                assert_eq!(dialog.target_text, command);
+                assert_eq!(
+                    dialog
+                        .options
+                        .iter()
+                        .map(|o| (o.number.as_str(), o.scope.as_str()))
+                        .collect::<Vec<_>>(),
+                    [("1", "once"), ("2", "deny")]
+                );
+                assert!(dialog.options[0].selected);
+            }
+            for screen in [
+                fixture.replace("  2. No,", "unrelated transcript row\n  2. No,"),
+                fixture
+                    .lines()
+                    .map(|line| format!("> {line}\n"))
+                    .collect::<String>(),
+            ] {
+                let explain = evaluate_loaded_manifest(
+                    Agent::Muse,
+                    DetectionInput {
+                        screen: &screen,
+                        osc_title: "",
+                        osc_progress: "",
+                    },
+                    loaded.clone(),
+                    false,
+                );
+                assert_ne!(
+                    explain.matched_rule.as_ref().map(|r| r.id.as_str()),
+                    Some("command_permission_prompt")
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn ql416_agy_reason_is_not_part_of_any_target() {
+    for (fixture, rule) in [
+        (
+            include_str!("../fixtures/agy-1.3.5/command-100.txt"),
+            "command_permission_prompt",
+        ),
+        (
+            include_str!("../fixtures/agy-1.3.5/file-access-100.txt"),
+            "file_access_dialog",
+        ),
+        (
+            include_str!("../fixtures/ql416-dialogs/network-reconstructed.txt"),
+            "network_permission_prompt",
+        ),
+        (
+            include_str!("../fixtures/ql416-dialogs/tool-reconstructed.txt"),
+            "tool_permission_prompt",
+        ),
+    ] {
+        let question = match rule {
+            "command_permission_prompt" => "Run this command?",
+            "file_access_dialog" => "Allow access to this file?",
+            "network_permission_prompt" => "Allow access to this URL?",
+            _ => "Allow calling this tool?",
+        };
+        let screen = fixture.replace(
+            question,
+            &format!("Reason: policy explanation\n  wrapped explanation\n\n{question}"),
+        );
+        for loaded in agy_manifests() {
+            let input = DetectionInput {
+                screen: &screen,
+                osc_title: "",
+                osc_progress: "",
+            };
+            let explain = explain_agy(&loaded, &screen);
+            let matched = explain.matched_rule.as_ref().unwrap();
+            assert_eq!(matched.id, rule);
+            let dialog =
+                super::super::dialog::parse("agy", rule, region(input, &matched.region)).unwrap();
+            assert!(!dialog.target_text.contains("Reason:"));
+            assert!(!dialog.target_text.contains("explanation"));
+            assert!(dialog.raw_text.contains("Reason:"));
+        }
+    }
+}
